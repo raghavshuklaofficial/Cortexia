@@ -1,0 +1,73 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Secrets & Environment
+.env
+.env.local
+.env.*.local
+.env.production
+.env.staging
+!.env.example
+
+# ML Models (downloaded at runtime)
+cortexia/core/models/weights/
+*.onnx
+*.pth
+*.pt
+*.pkl
+*.pickle
+
+# Legacy
+face_enc
+Images/
+
+# Node / Dashboard
+dashboard/node_modules/
+dashboard/dist/
+dashboard/.env
+
+# Docker
+docker/data/
+
+# Database
+*.db
+*.sqlite3
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test / Coverage
+.coverage
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Logs
+*.log
+logs/
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
