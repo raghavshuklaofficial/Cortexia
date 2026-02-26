@@ -1,0 +1,55 @@
+# Cortexia API Server — Multi-stage build
+
+# Stage 1: Build dependencies
+FROM python:3.11-slim AS builder
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    cmake \
+    libgl1 \
+    libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+
+COPY pyproject.toml ./
+RUN pip install --no-cache-dir --prefix=/install .
+
+# Stage 2: Runtime
+FROM python:3.11-slim AS runtime
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgl1 \
+    libglib2.0-0 \
+    curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && addgroup --system cortexia \
+    && adduser --system --home /home/cortexia --ingroup cortexia cortexia
+
+COPY --from=builder /install /usr/local
+
+WORKDIR /app
+
+COPY cortexia/ ./cortexia/
+COPY alembic.ini ./
+COPY pyproject.toml ./
+
+# Ensure cortexia user can write to necessary directories
+RUN mkdir -p /home/cortexia/.insightface /home/cortexia/.config \
+    && chown -R cortexia:cortexia /home/cortexia /app
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONPATH=/app \
+    CORTEXIA_ENV=production \
+    HOME=/home/cortexia \
+    MPLCONFIGDIR=/home/cortexia/.config/matplotlib
+
+EXPOSE 8000
+
+USER cortexia
+
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+CMD ["uvicorn", "cortexia.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
