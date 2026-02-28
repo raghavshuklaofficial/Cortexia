@@ -23,7 +23,7 @@ class Settings(BaseSettings):
 
     # Database
     database_url: str = (
-        "postgresql+asyncpg://cortexia:password@localhost:5432/cortexia"
+        "postgresql+asyncpg://cortexia:changeme@localhost:5432/cortexia"
     )
     database_pool_size: int = 10
     database_max_overflow: int = 20

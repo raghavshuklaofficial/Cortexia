@@ -1,4 +1,4 @@
-"""Image upload validation utilities."""
+"""Validation helpers for image uploads."""
 
 from __future__ import annotations
 
@@ -7,7 +7,6 @@ from fastapi import HTTPException, UploadFile
 MAX_IMAGE_SIZE = 10 * 1024 * 1024  # 10 MB
 MIN_IMAGE_SIZE = 100  # bytes
 
-# Magic byte signatures for allowed image formats
 _IMAGE_SIGNATURES: list[tuple[bytes, str]] = [
     (b"\xff\xd8\xff", "JPEG"),
     (b"\x89PNG\r\n\x1a\n", "PNG"),
@@ -17,23 +16,13 @@ _IMAGE_SIGNATURES: list[tuple[bytes, str]] = [
 
 
 def _check_image_signature(data: bytes) -> bool:
-    """Check if the data starts with a known image magic signature."""
     return any(data.startswith(sig) for sig, _ in _IMAGE_SIGNATURES)
 
 
 async def validate_image_upload(
     file: UploadFile, max_size: int = MAX_IMAGE_SIZE
 ) -> bytes:
-    """Read and validate an uploaded image file.
-
-    Checks:
-    - File is not empty
-    - File does not exceed max_size
-    - File starts with a recognized image format signature
-
-    Returns the raw bytes on success.
-    Raises HTTPException on validation failure.
-    """
+    """Read the upload, enforce size limits and check magic bytes."""
     content = await file.read()
 
     if len(content) < MIN_IMAGE_SIZE:

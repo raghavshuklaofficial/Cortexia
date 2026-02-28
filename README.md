@@ -13,7 +13,7 @@
 [![React](https://img.shields.io/badge/React_18-61DAFB.svg)](https://react.dev/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-[Quick Start](#-quick-start) · [Architecture](#-architecture) · [Features](#-features) · [API](#-api-reference) · [Dashboard](#-dashboard) · [Contributing](#-contributing)
+[Quick Start](#-quick-start) · [Architecture](#-architecture) · [Features](#-features) · [API](#-api-reference) · [Dashboard](#-dashboard) · [Deployment](#-production-deployment) · [Contributing](#-contributing)
 
 </div>
 
@@ -34,6 +34,7 @@ Most face recognition projects are toy scripts. CORTEXIA is what a **production 
 | **API** | None | FastAPI with WebSocket streaming |
 | **Frontend** | OpenCV window | React + TypeScript dashboard |
 | **Deployment** | `python script.py` | Docker Compose (6 services) |
+| **Security** | None | TLS, API key auth, rate limiting, hardened containers |
 | **Testing** | None | pytest + CI/CD pipeline |
 | **Audit Trail** | None | Immutable forensic event log |
 
@@ -41,7 +42,7 @@ Most face recognition projects are toy scripts. CORTEXIA is what a **production 
 
 ```
                     ┌──────────────────┐
-                    │   NGINX Gateway  │ ← Rate limiting, WebSocket upgrade
+                    │   NGINX Gateway  │ ← TLS termination, rate limiting, WebSocket upgrade
                     └────────┬─────────┘
                              │
               ┌──────────────┼──────────────┐
@@ -109,24 +110,50 @@ pgvector extension enables:
 
 ## 🚀 Quick Start
 
-### One-Command Deployment
+### Prerequisites
+
+- Docker & Docker Compose
+- `.env` file with required secrets (see below)
+
+### Setup & Run
 
 ```bash
 git clone https://github.com/raghavshuklaofficial/cortexia.git
 cd cortexia
+cp .env.example .env
+```
+
+Edit `.env` and fill in the required secrets:
+
+```bash
+# generate these:
+openssl rand -hex 32   # → SECRET_KEY
+openssl rand -hex 32   # → API_KEY
+openssl rand -hex 24   # → POSTGRES_PASSWORD
+openssl rand -hex 16   # → REDIS_PASSWORD
+```
+
+For local development, set `APP_ENV=development` in `.env`.
+
+Then start everything:
+
+```bash
 docker compose up --build
 ```
 
-That's it. Open **http://localhost** for the dashboard.
+Open **https://localhost** for the dashboard (you'll see a cert warning since the default setup uses self-signed TLS).
 
 ### Services Started
 
 | Service | Port | Description |
 |---------|------|-------------|
-| Dashboard | 80 | React UI (via nginx) |
-| API | 8000 | FastAPI + Trust Pipeline |
-| PostgreSQL | 5432 | Database + pgvector |
-| Redis | 6379 | Celery broker + cache |
+| Nginx | 443 | HTTPS gateway with TLS |
+| Nginx | 80 | Redirects to HTTPS |
+| API | 8000 (internal) | FastAPI + Trust Pipeline |
+| PostgreSQL | 5432 (internal) | Database + pgvector |
+| Redis | 6379 (internal) | Celery broker + cache |
+
+> Internal ports are not exposed to the host — all traffic goes through nginx.
 
 ### Seed Sample Data
 
@@ -152,11 +179,13 @@ cortexia info
 
 ## 📡 API Reference
 
+All API endpoints require the `X-API-Key` header in production.
+
 ### Recognition
 
 ```bash
-# Recognize faces in an image
-curl -X POST http://localhost:8000/api/v1/recognize \
+curl -X POST https://localhost/api/v1/recognize \
+  -H "X-API-Key: YOUR_API_KEY" \
   -F "image=@photo.jpg"
 ```
 
@@ -203,23 +232,27 @@ Response:
 
 ```bash
 # Create identity with face
-curl -X POST http://localhost:8000/api/v1/identities \
+curl -X POST https://localhost/api/v1/identities \
+  -H "X-API-Key: YOUR_API_KEY" \
   -F "name=Alice" \
-  -F "face_image=@alice.jpg"
+  -F "images=@alice.jpg"
 
 # List identities
-curl http://localhost:8000/api/v1/identities?page=1&size=20
+curl https://localhost/api/v1/identities?skip=0&limit=20 \
+  -H "X-API-Key: YOUR_API_KEY"
 
 # Add more faces
-curl -X POST http://localhost:8000/api/v1/identities/{id}/faces \
-  -F "face_images=@photo1.jpg" \
-  -F "face_images=@photo2.jpg"
+curl -X POST https://localhost/api/v1/identities/{id}/faces \
+  -H "X-API-Key: YOUR_API_KEY" \
+  -F "images=@photo1.jpg" \
+  -F "images=@photo2.jpg"
 ```
 
 ### WebSocket Streaming
 
 ```javascript
-const ws = new WebSocket("ws://localhost:8000/api/v1/streams/webcam");
+// token = your API key
+const ws = new WebSocket("wss://localhost/api/v1/streams/webcam?token=YOUR_API_KEY");
 ws.send(JSON.stringify({ type: "FRAME", image: base64Data }));
 ws.onmessage = (event) => {
   const analysis = JSON.parse(event.data);
@@ -231,11 +264,13 @@ ws.onmessage = (event) => {
 
 ```bash
 # Liveness check
-curl -X POST http://localhost:8000/api/v1/forensics/liveness \
+curl -X POST https://localhost/api/v1/forensics/liveness \
+  -H "X-API-Key: YOUR_API_KEY" \
   -F "image=@suspect.jpg"
 
 # Full forensic analysis
-curl -X POST http://localhost:8000/api/v1/forensics/analyze \
+curl -X POST https://localhost/api/v1/forensics/analyze \
+  -H "X-API-Key: YOUR_API_KEY" \
   -F "image=@evidence.jpg"
 ```
 
@@ -243,13 +278,16 @@ curl -X POST http://localhost:8000/api/v1/forensics/analyze \
 
 ```bash
 # Overview stats
-curl http://localhost:8000/api/v1/analytics/overview
+curl https://localhost/api/v1/analytics/overview \
+  -H "X-API-Key: YOUR_API_KEY"
 
 # Timeline (last 30 days)
-curl http://localhost:8000/api/v1/analytics/timeline?days=30
+curl "https://localhost/api/v1/analytics/timeline?days=30" \
+  -H "X-API-Key: YOUR_API_KEY"
 
 # Demographics
-curl http://localhost:8000/api/v1/analytics/demographics
+curl https://localhost/api/v1/analytics/demographics \
+  -H "X-API-Key: YOUR_API_KEY"
 ```
 
 ## 🎨 Dashboard
@@ -265,6 +303,57 @@ The React dashboard provides 7 views:
 | **Clusters** | HDBSCAN zero-shot identity discovery with merge-to-identity |
 | **Forensics** | Deep liveness analysis with component score breakdown |
 | **Settings** | System status, health checks, architecture info |
+
+## 🔒 Production Deployment
+
+CORTEXIA ships with a full production hardening setup. See `deploy/` for the scripts.
+
+### Security features built in
+
+- **TLS/HTTPS** — self-signed certs for IP-based deploys, easy swap to Let's Encrypt
+- **API key auth** — required on every endpoint, including WebSocket (via query param)
+- **Rate limiting** — nginx-level: 30 req/s API, 5 req/s uploads, 2 req/s WebSocket
+- **Security headers** — HSTS, CSP, X-Frame-Options, X-Content-Type-Options, Permissions-Policy
+- **Docker hardening** — internal-only ports, read-only filesystems, resource limits, `no-new-privileges`, network segmentation
+- **Redis auth** — password-protected, not exposed outside Docker network (This was done after i got affected by **Mozi Malware(Botnet Port Scanners)** 😅 previosuly i did not know about it)
+- **Upload validation** — magic-byte checking, 10 MB size limit, format whitelist
+- **No debug in prod** — `/docs`, `/redoc`, `/openapi.json` all disabled; error details hidden
+- **Startup validation** — app refuses to start without `SECRET_KEY` and `API_KEY`
+
+### Deploying to a VPS
+
+1. **Harden the VPS** (SSH, firewall, IPS):
+   ```bash
+   sudo bash deploy/setup-vps.sh
+   ```
+   This sets up: SSH key-only auth on a custom port, UFW firewall (only 80/443/SSH), Fail2ban, CrowdSec community IPS, automatic security updates, and kernel hardening.
+
+2. **Generate TLS certs**:
+   ```bash
+   bash scripts/generate-certs.sh YOUR_VPS_IP
+   ```
+
+3. **Configure and launch**:
+   ```bash
+   cp .env.example .env
+   # fill in secrets (see .env.example for instructions)
+   docker compose up -d
+   ```
+
+4. **Set up backups** (optional but recommended):
+   ```bash
+   # add to crontab — runs daily at 2 AM
+   0 2 * * * /opt/cortexia/deploy/backup.sh
+   ```
+
+### Upgrading to Let's Encrypt
+
+When you have a domain:
+```bash
+apt install certbot python3-certbot-nginx
+certbot certonly --standalone -d yourdomain.com
+# update the cert volume path in docker-compose.yml
+```
 
 ## 🧪 Testing
 
@@ -328,6 +417,7 @@ cortexia/
 │   │   ├── main.py             #   App factory + lifespan
 │   │   ├── schemas/            #   Pydantic v2 models
 │   │   ├── deps.py             #   Dependency injection
+│   │   ├── upload_utils.py     #   Image upload validation
 │   │   └── routes/             #   8 route modules
 │   ├── workers/                # Celery background tasks
 │   ├── cli.py                  # Click CLI (serve, enroll, recognize)
@@ -341,11 +431,24 @@ cortexia/
 │   ├── Dockerfile.api          #   Multi-stage API build
 │   ├── Dockerfile.worker       #   Celery worker
 │   ├── Dockerfile.dashboard    #   Node build → nginx serve
-│   └── nginx.conf              #   Edge gateway config
+│   └── nginx.conf              #   TLS + security headers + rate limiting
+├── deploy/                     # VPS hardening & ops scripts
+│   ├── setup-vps.sh            #   Master setup (runs everything below)
+│   ├── 01-ssh-harden.sh        #   SSH key-only, custom port
+│   ├── 02-firewall.sh          #   UFW rules
+│   ├── 03-fail2ban.sh          #   Brute force protection
+│   ├── 04-crowdsec.sh          #   Community IPS
+│   ├── 05-auto-updates.sh      #   Automatic security patches
+│   ├── 06-kernel-harden.sh     #   Sysctl hardening
+│   ├── backup.sh               #   Postgres + Redis backup
+│   └── health-monitor.sh       #   Health check + auto-restart
 ├── tests/                      # pytest suite
 │   ├── unit/                   #   Core module tests
 │   └── integration/            #   API endpoint tests
 ├── scripts/                    # Utility scripts
+│   ├── generate-certs.sh       #   Self-signed TLS for raw IP deploys
+│   ├── seed_data.py            #   Sample identity loader
+│   └── setup_models.py         #   ML model downloader
 ├── docs/                       # Architecture documentation
 ├── docker-compose.yml          # One-command deployment
 ├── pyproject.toml              # Python project config

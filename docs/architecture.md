@@ -124,23 +124,75 @@ Celery workers handle:
 - **Data cleanup**: Remove events past retention period (daily, GDPR)
 - **Gallery warming**: Pre-load identity gallery into memory (hourly)
 
-## Security Considerations
+## Security Architecture
 
-1. **API Key Authentication**: Optional in dev, required in production
-2. **Rate Limiting**: Nginx-level (30 req/s general, 5 req/s uploads)
-3. **Soft Delete**: Identities are soft-deleted by default (GDPR right to rectification)
-4. **Hard Delete**: Available for GDPR right to erasure
-5. **Privacy Scores**: Per-identity privacy scoring
-6. **No PII in Logs**: Structured logging without sensitive data
+### Authentication & Access Control
+
+1. **API Key Authentication**: Required on every endpoint via `X-API-Key` header. The app refuses to start without `API_KEY` and `SECRET_KEY` set in production mode.
+2. **WebSocket Authentication**: Token-based via query parameter (`?token=`), validated before the connection is accepted. Max 5 concurrent WebSocket connections to prevent resource exhaustion.
+3. **Startup Validation**: The application checks for required secrets at boot and fails fast if they're missing.
+
+### Network Security
+
+4. **TLS/HTTPS**: Self-signed certificates for raw IP deploys (with documented upgrade path to Let's Encrypt). HTTP automatically redirects to HTTPS.
+5. **Rate Limiting**: Nginx-level rate limiting across three zones:
+   - General API: 30 requests/sec (burst 50)
+   - Uploads: 5 requests/sec (burst 10)
+   - WebSocket: 2 connections/sec (burst 5)
+6. **Security Headers**: HSTS, Content-Security-Policy, Permissions-Policy, X-Frame-Options, X-Content-Type-Options, Referrer-Policy. Server tokens disabled.
+7. **CORS**: Explicit method and header allowlists (no wildcards).
+
+### Container Hardening
+
+8. **Internal-only Services**: Only nginx is exposed externally (ports 80/443). PostgreSQL, Redis, API, and workers are on an internal Docker network with no direct internet access.
+9. **Network Segmentation**: Two Docker networks — `frontend` (bridge, nginx only) and `backend` (internal, all services). Backend network blocks outbound internet.
+10. **Resource Limits**: CPU and memory limits on every container to prevent runaway processes.
+11. **Read-only Filesystems**: Nginx and dashboard containers run with `read_only: true` and `tmpfs` mounts for temp data.
+12. **Privilege Restrictions**: All containers run with `no-new-privileges` security option.
+13. **Redis Authentication**: Password-protected, not exposed outside the Docker network.
+
+### Application-Level Security
+
+14. **Upload Validation**: Magic-byte signature checking (JPEG, PNG, BMP, WebP), 10 MB size limit, minimum size enforcement. Applied on all upload endpoints.
+15. **Docs Disabled in Production**: `/docs`, `/redoc`, and `/openapi.json` are blocked with 404 in production. Error details are hidden.
+16. **Soft Delete**: Identities are soft-deleted by default (GDPR right to rectification).
+17. **Hard Delete**: Available for GDPR right to erasure.
+18. **No PII in Logs**: Structured logging without sensitive data. Log rotation on all containers (10 MB max, 5 files).
+
+### VPS Hardening (deploy/ scripts)
+
+19. **SSH**: Key-only authentication, custom port, root login disabled, 3 max auth tries, 5-minute idle timeout.
+20. **Firewall (UFW)**: Default deny incoming. Only SSH, HTTP (redirect), and HTTPS allowed. Common botnet ports explicitly blocked (Telnet, TR-069, ADB).
+21. **Fail2ban**: SSH brute force protection (24h ban after 3 attempts), nginx rate limit abuse detection (1h ban).
+22. **CrowdSec**: Community IPS with shared global botnet blocklists. Nginx, SSH, and Linux collections installed.
+23. **Automatic Updates**: Unattended-upgrades for security patches, weekly auto-clean.
+24. **Kernel Hardening**: SYN cookies, ICMP redirect blocking, reverse path filtering, martian packet logging, source routing disabled.
 
 ## Deployment Topology
 
-Single `docker compose up` command deploys:
-- 🗄️ PostgreSQL 16 + pgvector extension
-- 📦 Redis 7 (Celery broker + cache)
-- 🧠 CORTEXIA API (FastAPI + Uvicorn, 2 workers)
-- ⚙️ CORTEXIA Worker (Celery + Beat scheduler)
-- 🎨 Dashboard (React → nginx static)
-- 🌐 Nginx (reverse proxy, rate limiting, WebSocket upgrade)
+Single `docker compose up` command deploys 6 services across 2 isolated networks:
 
-All services use health checks and restart policies for production reliability.
+```
+                         Internet
+                            │
+                     ┌──────┴──────┐
+                     │   Nginx     │ ← Ports 80/443 (only public-facing service)
+                     │  (frontend) │    TLS termination, rate limiting
+                     └──────┬──────┘
+                            │
+              ┌─────────────┼─────────────┐
+              │             │             │      backend network
+    ┌─────────┴──┐  ┌───────┴───────┐  ┌──┴──────────┐  (internal, no internet)
+    │  Dashboard  │  │  FastAPI API   │  │   Celery    │
+    │  React SPA  │  │  Trust Pipeline│  │   Workers   │
+    └─────────────┘  └───────┬───────┘  └──┬──────────┘
+                             │             │
+                    ┌────────┴─────────────┴──────┐
+                    │                              │
+              ┌─────┴──────┐            ┌─────────┴──┐
+              │ PostgreSQL  │            │   Redis     │
+              │ + pgvector  │            │ (auth req.) │
+              └─────────────┘            └─────────────┘
+```
+
+All services use health checks, restart policies, resource limits, and log rotation for production reliability.
