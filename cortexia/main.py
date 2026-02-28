@@ -126,12 +126,21 @@ def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
     settings = get_settings()
 
+    # Refuse to start in production without required secrets
+    if settings.app_env == "production":
+        if not settings.api_key:
+            raise RuntimeError("API_KEY must be set in production mode")
+        if not settings.secret_key:
+            raise RuntimeError("SECRET_KEY must be set in production mode")
+
     from cortexia.utils.logging import setup_logging
 
     setup_logging(
         log_level=settings.log_level,
         json_output=settings.app_env == "production",
     )
+
+    is_prod = settings.app_env == "production"
 
     app = FastAPI(
         title="CORTEXIA",
@@ -140,8 +149,9 @@ def create_app() -> FastAPI:
             "Trust Pipeline · Zero-Shot Discovery · Forensic Audit Trail"
         ),
         version=__version__,
-        docs_url="/docs",
-        redoc_url="/redoc",
+        docs_url=None if is_prod else "/docs",
+        redoc_url=None if is_prod else "/redoc",
+        openapi_url=None if is_prod else "/openapi.json",
         lifespan=lifespan,
     )
 
@@ -150,8 +160,8 @@ def create_app() -> FastAPI:
         CORSMiddleware,
         allow_origins=settings.cors_origins,
         allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allow_headers=["Content-Type", "X-API-Key", "Authorization"],
     )
 
     # ───── Request Logging Middleware ─────

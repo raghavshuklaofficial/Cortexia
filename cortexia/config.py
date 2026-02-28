@@ -15,7 +15,7 @@ class Settings(BaseSettings):
 
     # Application
     app_name: str = "cortexia"
-    app_env: Literal["development", "staging", "production"] = "development"
+    app_env: Literal["development", "staging", "production"] = "production"
     log_level: str = "INFO"
     debug: bool = False
     secret_key: str = ""  # must be set via SECRET_KEY env var

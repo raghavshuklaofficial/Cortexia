@@ -27,12 +27,9 @@ async def verify_api_key(
 ) -> str:
     """Verify API key from X-API-Key header.
 
-    In development mode, authentication is optional.
-    In production, an API key is required.
+    API key is always required. For local development,
+    set API_KEY=dev in .env and send X-API-Key: dev.
     """
-    if settings.app_env == "development":
-        return x_api_key or "dev"
-
     if not x_api_key or x_api_key != settings.api_key:
         raise HTTPException(
             status_code=401,

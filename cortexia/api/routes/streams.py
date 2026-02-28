@@ -15,10 +15,13 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from cortexia.api.deps import get_pipeline
 from cortexia.api.routes.recognize import _face_analysis_to_schema
+from cortexia.config import get_settings
 
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="/streams", tags=["Streaming"])
+
+MAX_CONNECTIONS = 5
 
 
 class ConnectionManager:
@@ -27,10 +30,14 @@ class ConnectionManager:
     def __init__(self):
         self.active_connections: list[WebSocket] = []
 
-    async def connect(self, websocket: WebSocket) -> None:
+    async def connect(self, websocket: WebSocket) -> bool:
+        if len(self.active_connections) >= MAX_CONNECTIONS:
+            await websocket.close(code=4429, reason="Too many connections")
+            return False
         await websocket.accept()
         self.active_connections.append(websocket)
         logger.info("websocket_connected", total=len(self.active_connections))
+        return True
 
     def disconnect(self, websocket: WebSocket) -> None:
         if websocket in self.active_connections:
@@ -56,6 +63,7 @@ async def webcam_stream(websocket: WebSocket):
     """Real-time webcam face analysis via WebSocket.
 
     Protocol:
+    - Connect with ?token=<API_KEY> for authentication
     - Client sends base64-encoded JPEG frames as text messages
     - Server responds with JSON containing face analysis results
     - Send "PING" for keepalive, server responds with "PONG"
@@ -72,7 +80,19 @@ async def webcam_stream(websocket: WebSocket):
             "timestamp": "2025-01-01T12:00:00"
         }
     """
-    await manager.connect(websocket)
+    # Authenticate before accepting
+    settings = get_settings()
+    token = websocket.query_params.get("token")
+    if settings.app_env != "development" and (
+        not token or token != settings.api_key
+    ):
+        await websocket.close(code=4401, reason="Unauthorized")
+        return
+
+    connected = await manager.connect(websocket)
+    if not connected:
+        return
+
     pipeline = get_pipeline()
 
     # Initialize tracker for this connection

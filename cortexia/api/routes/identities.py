@@ -19,6 +19,7 @@ from cortexia.api.schemas.models import (
     IdentityUpdate,
     PaginationMeta,
 )
+from cortexia.api.upload_utils import validate_image_upload
 from cortexia.db.repositories.identity_repo import IdentityRepository
 from cortexia.db.repositories.vector_repo import VectorRepository
 
@@ -64,8 +65,9 @@ async def create_identity(
     # Process each image
     embedding_count = 0
     for img_file in images:
-        content = await img_file.read()
-        if not content:
+        try:
+            content = await validate_image_upload(img_file)
+        except HTTPException:
             continue
 
         # Decode image
@@ -259,8 +261,9 @@ async def add_faces(
     added = 0
 
     for img_file in images:
-        content = await img_file.read()
-        if not content:
+        try:
+            content = await validate_image_upload(img_file)
+        except HTTPException:
             continue
 
         nparr = np.frombuffer(content, np.uint8)

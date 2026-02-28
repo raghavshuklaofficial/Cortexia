@@ -43,7 +43,9 @@ export default function LiveFeedPage() {
 
       // Connect WebSocket
       const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-      const ws = new WebSocket(`${wsProtocol}//${window.location.host}/api/v1/streams/webcam`);
+      const ws = new WebSocket(
+        `${wsProtocol}//${window.location.host}/api/v1/streams/webcam?token=${import.meta.env.VITE_API_KEY || ""}`
+      );
       wsRef.current = ws;
 
       ws.onopen = () => {

@@ -14,6 +14,7 @@ from cortexia.api.schemas.models import (
     ForensicAnalysisResponse,
     LivenessSchema,
 )
+from cortexia.api.upload_utils import validate_image_upload
 
 router = APIRouter(prefix="/forensics", tags=["Forensics"])
 
@@ -31,9 +32,7 @@ async def check_liveness(
     - Texture analysis for micro-texture presence
     - Moiré pattern detection for screen replay
     """
-    content = await image.read()
-    if not content:
-        raise HTTPException(status_code=400, detail="Empty image file.")
+    content = await validate_image_upload(image)
 
     nparr = np.frombuffer(content, np.uint8)
     img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
@@ -73,9 +72,7 @@ async def full_forensic_analysis(
     Combines liveness detection, face quality assessment,
     and attribute prediction into one comprehensive report.
     """
-    content = await image.read()
-    if not content:
-        raise HTTPException(status_code=400, detail="Empty image file.")
+    content = await validate_image_upload(image)
 
     nparr = np.frombuffer(content, np.uint8)
     img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)

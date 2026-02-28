@@ -21,6 +21,7 @@ from cortexia.api.schemas.models import (
     RecognitionMatchSchema,
     RecognitionResponse,
 )
+from cortexia.api.upload_utils import validate_image_upload
 from cortexia.core.types import FaceAnalysis, LivenessVerdict
 from cortexia.db.repositories.event_repo import EventRepository
 
@@ -91,9 +92,7 @@ async def recognize_image(
 
     Returns detailed analysis for every detected face.
     """
-    content = await image.read()
-    if not content:
-        raise HTTPException(status_code=400, detail="Empty image file.")
+    content = await validate_image_upload(image)
 
     # Decode image
     nparr = np.frombuffer(content, np.uint8)
@@ -168,8 +167,9 @@ async def recognize_batch(
     total_spoofs = 0
 
     for img_file in images:
-        content = await img_file.read()
-        if not content:
+        try:
+            content = await validate_image_upload(img_file)
+        except HTTPException:
             continue
 
         nparr = np.frombuffer(content, np.uint8)

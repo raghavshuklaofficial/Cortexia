@@ -71,3 +71,9 @@ logs/
 # Celery
 celerybeat-schedule
 celerybeat.pid
+
+# TLS Certificates (generated locally)
+docker/certs/
+
+# Backups
+backups/
