@@ -43,22 +43,25 @@ async def readiness_check(
     except Exception:
         pass
 
-    # Check Redis
+    # Check Redis (async to avoid blocking the event loop)
     redis_status = "unavailable"
     try:
-        import redis as redis_lib
+        from redis.asyncio import from_url as async_redis_from_url
 
         settings = get_settings()
-        r = redis_lib.from_url(settings.redis_url, socket_timeout=2)
-        r.ping()
-        redis_status = "connected"
+        r = async_redis_from_url(settings.redis_url, socket_timeout=2)
+        try:
+            await r.ping()
+            redis_status = "connected"
+        finally:
+            await r.aclose()
     except Exception:
         pass
 
     # Check models
     try:
         pipeline = get_pipeline()
-        models_loaded = pipeline._initialized
+        models_loaded = getattr(pipeline, "_initialized", False)
     except Exception:
         models_loaded = False
 

@@ -19,6 +19,14 @@ async function request<T>(
     ...(options?.headers || {}),
   };
 
+  // Attach API key for authenticated requests
+  const apiKey =
+    localStorage.getItem("cortexia_api_key") ||
+    (import.meta as unknown as { env: Record<string, string> }).env?.VITE_API_KEY;
+  if (apiKey) {
+    headers["X-API-Key"] = apiKey;
+  }
+
   if (body && !(body instanceof FormData)) {
     headers["Content-Type"] = "application/json";
   }

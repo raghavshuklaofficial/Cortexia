@@ -23,14 +23,33 @@ from cortexia.workers import celery_app
 
 logger = structlog.get_logger(__name__)
 
+# Worker-level singleton to avoid re-loading ML models per task
+_pipeline = None
+
+
+def _get_pipeline():
+    """Get or create the worker-level pipeline singleton."""
+    global _pipeline
+    if _pipeline is None:
+        from cortexia.config import get_settings
+        from cortexia.core.trust_pipeline import PipelineConfig, TrustPipeline
+
+        settings = get_settings()
+        _pipeline = TrustPipeline(PipelineConfig.from_settings(settings))
+        _pipeline.initialize()
+    return _pipeline
+
 
 def _run_async(coro):
     """Run an async coroutine from a sync Celery task."""
-    loop = asyncio.new_event_loop()
     try:
-        return loop.run_until_complete(coro)
-    finally:
-        loop.close()
+        loop = asyncio.get_event_loop()
+        if loop.is_closed():
+            raise RuntimeError
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    return loop.run_until_complete(coro)
 
 
 @celery_app.task(bind=True, name="cortexia.batch_recognize", max_retries=2)
@@ -58,14 +77,11 @@ def batch_recognize(self, job_id: str, image_payloads: list[dict]) -> dict:
 
 async def _process_batch(job_id: str, payloads: list[dict]) -> list[dict]:
     """Internal async batch processing."""
-    from cortexia.config import get_settings
-    from cortexia.core.trust_pipeline import PipelineConfig, TrustPipeline
     from cortexia.db.session import async_session_factory, init_db
 
-    settings = get_settings()
     await init_db()
 
-    pipeline = TrustPipeline(PipelineConfig.from_settings(settings))
+    pipeline = _get_pipeline()
 
     results = []
     async with async_session_factory() as session:
@@ -254,23 +270,42 @@ def warm_gallery_cache() -> dict:
 
 
 async def _warm_gallery() -> dict:
-    """Internal async gallery warming."""
+    """Load all enrolled identities into the recognizer gallery."""
+    from cortexia.core.recognizer import StoredIdentity
     from cortexia.db.repositories.identity_repo import IdentityRepository
     from cortexia.db.session import async_session_factory, init_db
 
     await init_db()
 
+    pipeline = _get_pipeline()
+
     async with async_session_factory() as session:
         repo = IdentityRepository(session)
         identities = await repo.get_all_with_embeddings()
 
-        total_embeddings = sum(
-            len(identity.embeddings) for identity in identities
-        )
+        gallery = []
+        for ident in identities:
+            if not ident.embeddings:
+                continue
+            gallery.append(
+                StoredIdentity(
+                    identity_id=ident.id,
+                    name=ident.name,
+                    embeddings=[
+                        np.array(e.embedding, dtype=np.float32)
+                        for e in ident.embeddings
+                    ],
+                )
+            )
+
+        if pipeline.recognizer is not None:
+            pipeline.recognizer.load_gallery(gallery)
+
+        total_embeddings = sum(len(si.embeddings) for si in gallery)
 
     return {
         "status": "completed",
-        "identities_loaded": len(identities),
+        "identities_loaded": len(gallery),
         "total_embeddings": total_embeddings,
     }
 

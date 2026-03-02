@@ -106,13 +106,11 @@ class IdentityClusterer:
     def cluster(
         self,
         embeddings: NDArray[np.float32],
-        embedding_ids: list[int] | None = None,
     ) -> ClusteringResult:
         """Cluster face embeddings into identity groups.
 
         Args:
             embeddings: (N, 512) array of face embeddings
-            embedding_ids: Optional IDs for each embedding (for tracking)
 
         Returns:
             ClusteringResult with discovered clusters

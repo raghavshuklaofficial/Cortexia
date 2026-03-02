@@ -9,7 +9,7 @@ import time
 
 import cv2
 import numpy as np
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, HTTPException, UploadFile, File
 
 from cortexia.api.deps import DbSession, ApiKey, get_pipeline
 from cortexia.api.schemas.models import (

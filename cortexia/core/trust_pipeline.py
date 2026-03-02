@@ -60,6 +60,11 @@ class PipelineConfig:
 
     max_faces_per_frame: int = 20
 
+    # Trust score weights (must sum to 1.0)
+    trust_weight_detection: float = 0.20
+    trust_weight_liveness: float = 0.40
+    trust_weight_recognition: float = 0.40
+
     @classmethod
     def from_settings(cls, settings: Settings) -> PipelineConfig:
         """Create pipeline config from application settings."""
@@ -73,6 +78,9 @@ class PipelineConfig:
             recognition_threshold=settings.recognition_threshold,
             unknown_threshold=settings.unknown_threshold,
             max_faces_per_frame=settings.max_faces_per_frame,
+            trust_weight_detection=settings.trust_weight_detection,
+            trust_weight_liveness=settings.trust_weight_liveness,
+            trust_weight_recognition=settings.trust_weight_recognition,
         )
 
 
@@ -276,17 +284,11 @@ class TrustPipeline:
             analysis.attributes = attrs
 
         # ════════════ COMPUTE TRUST SCORE ════════════
-        # Weighted combination of all confidence signals
-        trust_weights = {
-            "detection": 0.20,
-            "liveness": 0.40,  # Liveness is weighted highest
-            "recognition": 0.40,
-        }
-
+        # Weighted combination of all confidence signals (from config)
         trust = (
-            trust_weights["detection"] * detection_conf
-            + trust_weights["liveness"] * liveness_conf
-            + trust_weights["recognition"] * recognition_conf
+            self._config.trust_weight_detection * detection_conf
+            + self._config.trust_weight_liveness * liveness_conf
+            + self._config.trust_weight_recognition * recognition_conf
         )
 
         # Penalize spoofs heavily

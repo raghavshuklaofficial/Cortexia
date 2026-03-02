@@ -15,9 +15,6 @@ from cortexia.api.schemas.models import (
 from cortexia.db.repositories.event_repo import EventRepository
 from cortexia.db.repositories.identity_repo import IdentityRepository
 
-from sqlalchemy import select, func
-from cortexia.db.models import Identity, FaceEmbedding
-
 router = APIRouter(prefix="/analytics", tags=["Analytics"])
 
 

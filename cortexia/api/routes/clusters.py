@@ -24,17 +24,23 @@ async def discover_clusters(
     db: DbSession = None,  # type: ignore[assignment]
     api_key: ApiKey = None,  # type: ignore[assignment]
 ):
-    """Trigger HDBSCAN clustering on unidentified face embeddings.
+    """Trigger HDBSCAN clustering on existing un-merged cluster member embeddings.
 
-    Scans the recognition_events table for unknown faces, extracts
-    their embeddings, and groups them into identity clusters using
-    density-based clustering.
+    Re-clusters all face embeddings stored in cluster_members whose
+    parent cluster has not yet been merged into an identity.
+
+    Note: ClusterMember records must be populated externally (e.g. via
+    batch recognition tasks that store unknown-face embeddings).
     """
     pipeline = get_pipeline()
     clusterer = pipeline.clusterer
 
-    # Get all cluster member embeddings (unknown faces)
-    stmt = select(ClusterMember)
+    # Get embeddings from un-merged clusters (or all members if no clusters yet)
+    stmt = (
+        select(ClusterMember)
+        .join(Cluster, ClusterMember.cluster_id == Cluster.id)
+        .where(Cluster.merged_into_identity_id.is_(None))
+    )
     result = await db.execute(stmt)
     members = list(result.scalars().all())
 
@@ -45,10 +51,12 @@ async def discover_clusters(
         )
 
     embeddings = np.array([m.embedding_vector for m in members], dtype=np.float32)
+    member_ids = [m.id for m in members]
     cluster_result = clusterer.cluster(embeddings)
 
-    # Store clusters in database
+    # Store clusters and their members in database
     created_clusters = 0
+    created_db_clusters: list[Cluster] = []
     for cluster in cluster_result.clusters:
         if cluster.is_noise:
             continue
@@ -58,13 +66,34 @@ async def discover_clusters(
             member_count=cluster.member_count,
         )
         db.add(db_cluster)
+        await db.flush()  # get the cluster ID
+
+        # Assign members to this cluster
+        for idx in cluster.member_indices:
+            if idx < len(member_ids):
+                member = await db.get(ClusterMember, member_ids[idx])
+                if member is not None:
+                    member.cluster_id = db_cluster.id
+
         created_clusters += 1
+        created_db_clusters.append(db_cluster)
 
     await db.flush()
 
     return ApiResponse(
         message=f"Discovered {created_clusters} identity clusters.",
-        data=cluster_result.to_dict(),
+        data={
+            "clusters": [
+                {
+                    "id": c.id,
+                    "member_count": c.member_count,
+                    "created_at": str(c.created_at),
+                }
+                for c in created_db_clusters
+            ],
+            "total": created_clusters,
+            "noise_count": cluster_result.noise_count,
+        },
     )
 
 

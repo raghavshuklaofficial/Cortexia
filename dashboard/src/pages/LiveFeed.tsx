@@ -104,9 +104,19 @@ export default function LiveFeedPage() {
   }, [setStreaming, setFps]);
 
   const sendFrames = useCallback(() => {
+    const FRAME_INTERVAL = 66; // ~15 fps
+    let lastSendTime = 0;
+
     const send = () => {
       if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
       if (!videoRef.current || !canvasRef.current) return;
+
+      const now = performance.now();
+      if (now - lastSendTime < FRAME_INTERVAL) {
+        animFrameRef.current = requestAnimationFrame(send);
+        return;
+      }
+      lastSendTime = now;
 
       const video = videoRef.current;
       const canvas = canvasRef.current;
@@ -127,11 +137,7 @@ export default function LiveFeedPage() {
       animFrameRef.current = requestAnimationFrame(send);
     };
 
-    // Throttle to ~15 fps
-    const throttled = () => {
-      send();
-    };
-    setTimeout(throttled, 66);
+    animFrameRef.current = requestAnimationFrame(send);
   }, []);
 
   const drawOverlay = useCallback((detectedFaces: StreamFace[]) => {

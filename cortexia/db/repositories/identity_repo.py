@@ -107,7 +107,15 @@ class IdentityRepository:
 
     async def hard_delete(self, identity_id: int) -> bool:
         """Hard delete an identity and all associated data (GDPR compliance)."""
-        identity = await self.get_by_id(identity_id)
+        # Query by ID directly (without is_active filter) so soft-deleted
+        # identities can still be permanently removed.
+        stmt = (
+            select(Identity)
+            .where(Identity.id == identity_id)
+            .options(selectinload(Identity.embeddings))
+        )
+        result = await self._session.execute(stmt)
+        identity = result.scalar_one_or_none()
         if identity is None:
             return False
 

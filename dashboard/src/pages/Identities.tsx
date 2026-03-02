@@ -27,7 +27,7 @@ export default function IdentitiesPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState("");
   const [newFile, setNewFile] = useState<File | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRefs = useRef<Map<number, HTMLInputElement>>(new Map());
   const { setIdentities: setGlobalIdentities } = useAppStore();
 
   const pageSize = 12;
@@ -199,13 +199,16 @@ export default function IdentitiesPage() {
                     variant="outline"
                     size="sm"
                     className="flex-1"
-                    onClick={() => fileInputRef.current?.click()}
+                    onClick={() => fileInputRefs.current.get(identity.id)?.click()}
                   >
                     <Upload className="mr-1 h-3 w-3" />
                     Add Faces
                   </Button>
                   <input
-                    ref={fileInputRef}
+                    ref={(el) => {
+                      if (el) fileInputRefs.current.set(identity.id, el);
+                      else fileInputRefs.current.delete(identity.id);
+                    }}
                     type="file"
                     multiple
                     accept="image/*"

@@ -10,6 +10,7 @@ to convert distances into calibrated probabilities — so a confidence of
 from __future__ import annotations
 
 import math
+import threading
 import time
 from dataclasses import dataclass
 
@@ -104,6 +105,7 @@ class FaceRecognizer:
         self._unknown_threshold = unknown_threshold
         self._calibrator = PlattCalibrator()
         self._gallery: list[StoredIdentity] = []
+        self._lock = threading.Lock()
         logger.info(
             "recognizer_initialized",
             threshold=recognition_threshold,
@@ -121,21 +123,23 @@ class FaceRecognizer:
         Args:
             identities: List of enrolled identities with embeddings
         """
-        self._gallery = identities
+        with self._lock:
+            self._gallery = list(identities)
         logger.info("gallery_loaded", identities=len(identities))
 
     def add_to_gallery(self, identity: StoredIdentity) -> None:
         """Add a single identity to the gallery."""
-        # Check if identity already exists
-        for i, existing in enumerate(self._gallery):
-            if existing.identity_id == identity.identity_id:
-                self._gallery[i] = identity
-                return
-        self._gallery.append(identity)
+        with self._lock:
+            for i, existing in enumerate(self._gallery):
+                if existing.identity_id == identity.identity_id:
+                    self._gallery[i] = identity
+                    return
+            self._gallery.append(identity)
 
     def remove_from_gallery(self, identity_id: int) -> None:
         """Remove an identity from the gallery."""
-        self._gallery = [g for g in self._gallery if g.identity_id != identity_id]
+        with self._lock:
+            self._gallery = [g for g in self._gallery if g.identity_id != identity_id]
 
     def recognize(
         self,
@@ -162,13 +166,15 @@ class FaceRecognizer:
                 is_known=False,
             )
 
-        # Compute cosine similarity against all gallery centroids
-        best_sim = -1.0
-        best_identity: StoredIdentity | None = None
+        # Compute cosine similarity against all gallery embeddings
+        # Collect (similarity, identity) candidates
+        candidates: list[tuple[float, StoredIdentity]] = []
 
-        for identity in self._gallery:
-            # Compare against each enrolled embedding (not just centroid)
-            # Take the maximum similarity across all enrolled faces
+        with self._lock:
+            gallery_snapshot = list(self._gallery)
+
+        for identity in gallery_snapshot:
+            best_id_sim = -1.0
             for enrolled_emb in identity.embeddings:
                 sim = float(
                     np.dot(
@@ -176,9 +182,15 @@ class FaceRecognizer:
                         enrolled_emb.astype(np.float32),
                     )
                 )
-                if sim > best_sim:
-                    best_sim = sim
-                    best_identity = identity
+                if sim > best_id_sim:
+                    best_id_sim = sim
+            candidates.append((best_id_sim, identity))
+
+        # Sort by similarity descending, take top_k
+        candidates.sort(key=lambda c: c[0], reverse=True)
+        candidates = candidates[:top_k]
+
+        best_sim, best_identity = candidates[0]
 
         elapsed_ms = (time.perf_counter() - start) * 1000
 

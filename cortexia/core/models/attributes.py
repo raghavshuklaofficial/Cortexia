@@ -101,7 +101,7 @@ class FaceAttributePredictor:
         # Age and Gender via InsightFace
         if self._insightface_app and (self._enable_age or self._enable_gender):
             try:
-                face_resized = cv2.resize(face_crop, (160, 160))
+                face_resized = cv2.resize(face_crop, (112, 112))
                 faces = self._insightface_app.get(face_resized)
                 if faces:
                     face = faces[0]
@@ -109,7 +109,11 @@ class FaceAttributePredictor:
                         attrs.age = int(face.age)
                     if self._enable_gender and hasattr(face, "gender"):
                         attrs.gender = "male" if face.gender == 1 else "female"
-                        attrs.gender_confidence = 0.85  # InsightFace doesn't expose this
+                        # InsightFace returns gender as 0/1 integer; no raw
+                        # probability is exposed, so report as estimated.
+                        attrs.gender_confidence = float(
+                            getattr(face, "gender_score", 0.85)
+                        )
             except Exception as e:
                 logger.debug("genderage_prediction_failed", error=str(e))
 

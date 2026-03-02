@@ -11,12 +11,18 @@ _IMAGE_SIGNATURES: list[tuple[bytes, str]] = [
     (b"\xff\xd8\xff", "JPEG"),
     (b"\x89PNG\r\n\x1a\n", "PNG"),
     (b"BM", "BMP"),
-    (b"RIFF", "WebP"),
 ]
 
 
 def _check_image_signature(data: bytes) -> bool:
-    return any(data.startswith(sig) for sig, _ in _IMAGE_SIGNATURES)
+    """Check magic bytes. WebP needs a special check (RIFF....WEBP)."""
+    for sig, _ in _IMAGE_SIGNATURES:
+        if data.startswith(sig):
+            return True
+    # WebP: starts with RIFF and has WEBP at bytes 8-11
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return True
+    return False
 
 
 async def validate_image_upload(

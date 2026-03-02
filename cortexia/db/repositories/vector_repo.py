@@ -70,13 +70,19 @@ class VectorRepository:
         )
 
         if threshold is not None:
-            query_str += f"AND fe.embedding <=> :query_vec < {threshold} "
+            query_str += "AND fe.embedding <=> :query_vec < :threshold "
 
         query_str += "ORDER BY fe.embedding <=> :query_vec LIMIT :limit"
 
+        # pgvector expects '[x,y,z,...]' format
+        vec_str = "[" + ",".join(str(v) for v in query_embedding) + "]"
+        params: dict = {"query_vec": vec_str, "limit": top_k}
+        if threshold is not None:
+            params["threshold"] = threshold
+
         result = await self._session.execute(
             text(query_str),
-            {"query_vec": str(query_embedding), "limit": top_k},
+            params,
         )
 
         matches = []
@@ -106,16 +112,14 @@ class VectorRepository:
 
     async def delete_embeddings_for_identity(self, identity_id: int) -> int:
         """Delete all embeddings for an identity. Returns count deleted."""
-        stmt = select(FaceEmbedding).where(
+        from sqlalchemy import delete as sa_delete
+
+        stmt = sa_delete(FaceEmbedding).where(
             FaceEmbedding.identity_id == identity_id
         )
         result = await self._session.execute(stmt)
-        embeddings = result.scalars().all()
-        count = len(list(embeddings))
-        for emb in embeddings:
-            await self._session.delete(emb)
         await self._session.flush()
-        return count
+        return result.rowcount
 
     async def get_all_embeddings(self) -> list[tuple[int, list[float]]]:
         """Get all embeddings as (identity_id, vector) tuples for gallery loading."""

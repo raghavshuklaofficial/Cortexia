@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import time
 from abc import ABC, abstractmethod
-from typing import Protocol
 
 import cv2
 import numpy as np
@@ -27,17 +26,6 @@ logger = structlog.get_logger(__name__)
 
 # Standard aligned face size for ArcFace embedding models
 ALIGNED_FACE_SIZE = (112, 112)
-
-
-class FaceDetectorProtocol(Protocol):
-    """Protocol that all face detectors must satisfy."""
-
-    def detect(
-        self, image: NDArray[np.uint8], threshold: float = 0.5
-    ) -> list[DetectedFace]: ...
-
-    @property
-    def name(self) -> str: ...
 
 
 class BaseFaceDetector(ABC):
@@ -243,16 +231,22 @@ class MediaPipeDetector(BaseFaceDetector):
             bbox = BoundingBox(x1=x1, y1=y1, x2=x2, y2=y2)
 
             # Extract keypoints for landmarks
+            # MediaPipe keypoint order: 0=right_eye, 1=left_eye, 2=nose,
+            # 3=mouth_center, 4=right_ear, 5=left_ear
             kps = det.location_data.relative_keypoints
             landmarks = None
             aligned = None
             if len(kps) >= 5:
+                # Approximate mouth corners from mouth center
+                mouth_cx = kps[3].x * w
+                mouth_cy = kps[3].y * h
+                mouth_spread = abs(kps[1].x - kps[0].x) * w * 0.35
                 landmarks = FaceLandmarks(
-                    left_eye=(kps[0].x * w, kps[0].y * h),
-                    right_eye=(kps[1].x * w, kps[1].y * h),
+                    left_eye=(kps[1].x * w, kps[1].y * h),
+                    right_eye=(kps[0].x * w, kps[0].y * h),
                     nose=(kps[2].x * w, kps[2].y * h),
-                    mouth_left=(kps[3].x * w, kps[3].y * h),
-                    mouth_right=(kps[4].x * w, kps[4].y * h),
+                    mouth_left=(mouth_cx - mouth_spread, mouth_cy),
+                    mouth_right=(mouth_cx + mouth_spread, mouth_cy),
                 )
                 aligned = self.align_face(image, landmarks)
 

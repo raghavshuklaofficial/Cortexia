@@ -16,13 +16,13 @@ from sqlalchemy.ext.asyncio import (
 
 from cortexia.config import get_settings
 
-settings = get_settings()
+_settings = get_settings()
 
 engine = create_async_engine(
-    settings.database_url,
-    pool_size=settings.database_pool_size,
-    max_overflow=settings.database_max_overflow,
-    echo=settings.debug,
+    _settings.database_url,
+    pool_size=_settings.database_pool_size,
+    max_overflow=_settings.database_max_overflow,
+    echo=_settings.debug,
     pool_pre_ping=True,
 )
 
@@ -61,3 +61,12 @@ async def init_db() -> None:
 async def close_db() -> None:
     """Close database connections."""
     await engine.dispose()
+
+
+def get_session_factory(database_url: str) -> async_sessionmaker[AsyncSession]:
+    """Create a standalone session factory for a given database URL.
+
+    Useful for CLI commands or scripts that don't use the default engine.
+    """
+    eng = create_async_engine(database_url, pool_pre_ping=True)
+    return async_sessionmaker(eng, class_=AsyncSession, expire_on_commit=False)

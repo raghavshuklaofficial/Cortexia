@@ -12,12 +12,20 @@ RETENTION_DAYS=30
 DATE=$(date +%Y-%m-%d_%H%M)
 LOG="/var/log/cortexia-backup.log"
 
+# Source .env for cron context (provides POSTGRES_USER, POSTGRES_DB, etc.)
+if [ -f "$PROJECT_DIR/.env" ]; then
+    set -a
+    # shellcheck source=/dev/null
+    . "$PROJECT_DIR/.env"
+    set +a
+fi
+
 mkdir -p "$BACKUP_DIR"
 
 echo "$(date -u) Starting backup..." >> "$LOG"
 
 # PostgreSQL dump via Docker
-if docker compose -f "$PROJECT_DIR/docker-compose.yml" ps postgres | grep -q "running"; then
+if docker compose -f "$PROJECT_DIR/docker-compose.yml" ps --status running postgres 2>/dev/null | grep -q postgres; then
     docker compose -f "$PROJECT_DIR/docker-compose.yml" exec -T postgres \
         pg_dump -U "${POSTGRES_USER:-cortexia}" "${POSTGRES_DB:-cortexia}" \
         | gzip > "$BACKUP_DIR/cortexia-db-$DATE.sql.gz"
@@ -27,7 +35,7 @@ else
 fi
 
 # Redis data backup via temporary container
-if docker compose -f "$PROJECT_DIR/docker-compose.yml" ps redis | grep -q "running"; then
+if docker compose -f "$PROJECT_DIR/docker-compose.yml" ps --status running redis 2>/dev/null | grep -q redis; then
     docker run --rm \
         -v "${PROJECT_DIR##*/}_redisdata:/data:ro" \
         -v "$BACKUP_DIR":/backup \

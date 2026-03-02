@@ -8,12 +8,11 @@ import hashlib
 
 import cv2
 import numpy as np
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 
 from cortexia.api.deps import DbSession, ApiKey, get_pipeline
 from cortexia.api.schemas.models import (
     ApiResponse,
-    IdentityCreate,
     IdentityListResponse,
     IdentityResponse,
     IdentityUpdate,
@@ -80,12 +79,15 @@ async def create_identity(
         result = pipeline.process_image(image)
         if result.face_count == 0:
             continue
-        if result.face_count > 1:
-            # Take the largest face
-            pass
 
-        # Take the first (or largest) face
-        face_analysis = result.faces[0]
+        # Take the largest face by bounding box area
+        faces_sorted = sorted(
+            result.faces,
+            key=lambda f: (f.bbox.x2 - f.bbox.x1) * (f.bbox.y2 - f.bbox.y1)
+            if f.bbox else 0,
+            reverse=True,
+        )
+        face_analysis = faces_sorted[0]
         if face_analysis.embedding is None:
             continue
 
@@ -357,4 +359,5 @@ async def _refresh_gallery(db: DbSession, pipeline) -> None:
             )
         )
 
-    pipeline.recognizer.load_gallery(gallery)
+    if pipeline.recognizer is not None:
+        pipeline.recognizer.load_gallery(gallery)

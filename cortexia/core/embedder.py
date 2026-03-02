@@ -85,14 +85,14 @@ class FaceEmbedder:
         """Dimensionality of the output embeddings."""
         return self._embedding_dim
 
-    def extract(self, aligned_face: NDArray[np.uint8]) -> NDArray[np.float32]:
+    def extract(self, aligned_face: NDArray[np.uint8]) -> NDArray:
         """Extract embedding from a single aligned face crop.
 
         Args:
             aligned_face: BGR uint8 image, ideally 112x112 from alignment
 
         Returns:
-            L2-normalized 512-d float32 (or float16 if quantize=True) embedding
+            L2-normalized 512-d embedding (float32, or float16 if quantize=True)
         """
         start = time.perf_counter()
 

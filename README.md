@@ -70,7 +70,7 @@ Frame → Detection → Alignment → Liveness → Embedding → Recognition →
          (99.4%)      112×112     ensemble    L2-norm     Scaling      Emotion
 ```
 
-**Trust Score** = `0.20·detection + 0.40·liveness + 0.40·recognition` (penalized 0.3× for spoofs)
+**Trust Score** = `w₁·detection + w₂·liveness + w₃·recognition` (default 0.20/0.40/0.40, configurable via `TRUST_WEIGHT_*` env vars; penalized 0.3× for spoofs)
 
 ## ✨ Features
 
@@ -462,7 +462,7 @@ cortexia/
 |-------|-----------|-----|
 | **Detection** | RetinaFace (InsightFace) | SOTA accuracy, 5-point landmarks |
 | **Embeddings** | ArcFace buffalo_l | 512-d, 99.83% LFW accuracy |
-| **Anti-Spoof** | Custom ensemble | Multi-spectral analysis, no DNN dependency |
+| **Anti-Spoof** | Heuristic ensemble | Multi-spectral analysis (FFT, color, texture, moiré) |
 | **Calibration** | Platt Scaling | Mathematically grounded confidence |
 | **Clustering** | HDBSCAN | Density-based, no k parameter needed |
 | **API** | FastAPI | Async, OpenAPI docs, WebSocket support |

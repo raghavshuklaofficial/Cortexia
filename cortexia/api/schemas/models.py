@@ -267,13 +267,4 @@ class SystemInfo(BaseModel):
     total_embeddings: int
 
 
-# ─── WebSocket Schemas ───────────────────────────────────────
 
-
-class StreamFrame(BaseModel):
-    """WebSocket message for a processed frame."""
-
-    faces: list[FaceAnalysisSchema]
-    face_count: int
-    fps: float
-    timestamp: str

@@ -48,7 +48,7 @@ Frame → Detection → Alignment → Liveness → Embedding → Recognition →
 
 2. **Alignment (ArcFace Reference)**: Similarity transform to canonical 112×112 crop using 5 landmarks (2 eyes, nose, 2 mouth corners). This normalization is critical for embedding quality.
 
-3. **Liveness (Multi-Spectral Ensemble)**: Four independent anti-spoofing analyses:
+3. **Liveness (Heuristic Ensemble)**: Four independent anti-spoofing analyses (no neural network model — all algorithmic):
    - **Frequency Analysis (FFT)**: Detects screen/print artifacts via high-frequency energy ratios
    - **Color Analysis (YCrCb)**: Measures chroma distribution anomalies
    - **Texture Analysis (Laplacian + Sobel)**: Evaluates surface texture naturalness
@@ -69,7 +69,8 @@ Frame → Detection → Alignment → Liveness → Embedding → Recognition →
 ### Trust Score Composition
 
 ```
-trust = 0.20·detection_conf + 0.40·liveness_conf + 0.40·recognition_conf
+trust = w₁·detection_conf + w₂·liveness_conf + w₃·recognition_conf
+# Defaults: w₁=0.20, w₂=0.40, w₃=0.40 (configurable via Settings)
 if spoof_detected:
     trust *= 0.3  # Heavy penalty
 ```
@@ -144,8 +145,8 @@ Celery workers handle:
 
 ### Container Hardening
 
-8. **Internal-only Services**: Only nginx is exposed externally (ports 80/443). PostgreSQL, Redis, API, and workers are on an internal Docker network with no direct internet access.
-9. **Network Segmentation**: Two Docker networks — `frontend` (bridge, nginx only) and `backend` (internal, all services). Backend network blocks outbound internet.
+8. **Internal-only Services**: Only nginx is exposed externally (ports 80/443). PostgreSQL, Redis, API, and workers communicate on the backend Docker network.
+9. **Network Segmentation**: Two Docker networks — `frontend` (bridge, nginx only) and `backend` (bridge, all services). Only nginx bridges both networks.
 10. **Resource Limits**: CPU and memory limits on every container to prevent runaway processes.
 11. **Read-only Filesystems**: Nginx and dashboard containers run with `read_only: true` and `tmpfs` mounts for temp data.
 12. **Privilege Restrictions**: All containers run with `no-new-privileges` security option.
@@ -196,3 +197,6 @@ Single `docker compose up` command deploys 6 services across 2 isolated networks
 ```
 
 All services use health checks, restart policies, resource limits, and log rotation for production reliability.
+> **Note**: The backend network is a standard bridge (not `internal`) to allow
+> containers to download ML model weights at first startup. Only nginx
+> exposes ports to the host.

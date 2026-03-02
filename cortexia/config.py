@@ -51,7 +51,7 @@ class Settings(BaseSettings):
 
     # ML Models
     model_backend: str = "retinaface"
-    model_cache_dir: Path = Path("/app/models")
+    model_cache_dir: Path = Path.home() / ".cortexia" / "models"
     embedding_dim: int = 512
     detection_threshold: float = 0.5
 

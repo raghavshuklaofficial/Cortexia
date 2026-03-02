@@ -190,6 +190,11 @@ class Cluster(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
+    # Relationships
+    members: Mapped[list[ClusterMember]] = relationship(
+        "ClusterMember", back_populates="cluster", cascade="all, delete-orphan"
+    )
+
     def __repr__(self) -> str:
         return f"<Cluster(id={self.id}, members={self.member_count})>"
 
@@ -209,4 +214,12 @@ class ClusterMember(Base):
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
+    )
+
+    # Relationships
+    cluster: Mapped[Cluster] = relationship(
+        "Cluster", back_populates="members"
+    )
+    source_event: Mapped[RecognitionEvent | None] = relationship(
+        "RecognitionEvent"
     )

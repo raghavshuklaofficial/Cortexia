@@ -4,9 +4,9 @@ Recognition events repository — audit trail of all recognition actions.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import select, func, and_
+from sqlalchemy import select, func, and_, true as sa_true
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from cortexia.db.models import RecognitionEvent
@@ -75,7 +75,7 @@ class EventRepository:
         if until is not None:
             conditions.append(RecognitionEvent.timestamp <= until)
 
-        where_clause = and_(*conditions) if conditions else True
+        where_clause = and_(*conditions) if conditions else sa_true()
 
         # Count
         count_stmt = (
@@ -142,7 +142,7 @@ class EventRepository:
         days: int = 7,
     ) -> list[dict]:
         """Get recognition event counts grouped by time interval."""
-        since = datetime.utcnow() - timedelta(days=days)
+        since = datetime.now(timezone.utc) - timedelta(days=days)
 
         if interval == "hour":
             trunc_func = func.date_trunc("hour", RecognitionEvent.timestamp)

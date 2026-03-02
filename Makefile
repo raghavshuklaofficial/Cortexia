@@ -1,4 +1,4 @@
-.PHONY: help dev up down build test lint format typecheck migrate seed benchmark clean download-models logs shell
+.PHONY: help dev up down build test lint format typecheck migrate seed clean download-models logs shell
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -32,7 +32,7 @@ migrate-create: ## Create a new migration (usage: make migrate-create MSG="descr
 	docker compose -f docker-compose.yml exec api alembic revision --autogenerate -m "$(MSG)"
 
 seed: ## Seed the database with sample data
-	docker compose -f docker-compose.yml exec api python -m scripts.seed_data
+	docker compose -f docker-compose.yml exec api python scripts/seed_data.py
 
 # ─── Quality ────────────────────────────────────────────────
 
@@ -59,11 +59,6 @@ typecheck: ## Run type checker (mypy)
 
 download-models: ## Download ML model weights
 	docker compose -f docker-compose.yml exec api python -m scripts.setup_models
-
-# ─── Load Testing ───────────────────────────────────────────
-
-benchmark: ## Run load tests with Locust
-	docker compose -f docker-compose.yml exec api locust -f tests/load/locustfile.py --headless -u 50 -r 10 --run-time 60s
 
 # ─── Cleanup ────────────────────────────────────────────────
 

@@ -95,14 +95,6 @@ async def webcam_stream(websocket: WebSocket):
 
     pipeline = get_pipeline()
 
-    # Initialize tracker for this connection
-    from cortexia.core.tracker import FaceTracker
-
-    tracker = FaceTracker(
-        max_age=30,
-        recognition_interval=5,
-    )
-
     frame_count = 0
     fps_start = time.perf_counter()
 
@@ -178,4 +170,3 @@ async def webcam_stream(websocket: WebSocket):
         logger.error("webcam_stream_error", error=str(e))
     finally:
         manager.disconnect(websocket)
-        tracker.reset()

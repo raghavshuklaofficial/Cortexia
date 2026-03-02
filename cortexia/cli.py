@@ -16,11 +16,13 @@ import click
 from rich.console import Console
 from rich.table import Table
 
+from cortexia import __version__
+
 console = Console()
 
 
 @click.group()
-@click.version_option(version="1.0.0", prog_name="cortexia")
+@click.version_option(version=__version__, prog_name="cortexia")
 def cli():
     """CORTEXIA — Neural Face Intelligence Platform."""
     pass
@@ -39,7 +41,7 @@ def serve(host: str, port: int, workers: int, reload: bool):
 
     setup_logging(log_level="INFO")
 
-    console.print(f"[bold green]CORTEXIA[/] v1.0.0 starting on {host}:{port}")
+    console.print(f"[bold green]CORTEXIA[/] v{__version__} starting on {host}:{port}")
     console.print(f"  Docs:  http://{host}:{port}/docs")
     console.print(f"  Redoc: http://{host}:{port}/redoc")
 
@@ -59,15 +61,19 @@ def serve(host: str, port: int, workers: int, reload: bool):
 def enroll(name: str, images: str):
     """Enroll a new identity from image files."""
     import asyncio
+    import hashlib
     from pathlib import Path
 
     import cv2
-    import numpy as np
 
     async def _enroll():
-        from cortexia.core.trust_pipeline import TrustPipeline
+        from cortexia.config import get_settings
+        from cortexia.core.trust_pipeline import PipelineConfig, TrustPipeline
+        from cortexia.db.session import get_session_factory
 
-        pipeline = TrustPipeline()
+        settings = get_settings()
+        config = PipelineConfig.from_settings(settings)
+        pipeline = TrustPipeline(config)
         pipeline.initialize()
 
         image_path = Path(images)
@@ -78,9 +84,13 @@ def enroll(name: str, images: str):
         else:
             image_files = [image_path]
 
+        if not image_files:
+            console.print("[red]Error:[/] No image files found.")
+            return
+
         console.print(f"[bold]Enrolling[/] '{name}' with {len(image_files)} image(s)...")
 
-        embeddings = []
+        embeddings: list[tuple[list[float], str]] = []
         for img_path in image_files:
             img = cv2.imread(str(img_path))
             if img is None:
@@ -94,10 +104,33 @@ def enroll(name: str, images: str):
 
             fa = result.faces[0]
             if fa.embedding is not None:
-                embeddings.append(fa.embedding)
+                img_hash = hashlib.sha256(img_path.read_bytes()).hexdigest()
+                embeddings.append((fa.embedding.tolist(), img_hash))
                 console.print(f"  [green]OK[/]   {img_path.name} (confidence: {fa.face.confidence:.3f})")
 
-        console.print(f"\n[bold green]Enrolled[/] {name} with {len(embeddings)} face embedding(s)")
+        if not embeddings:
+            console.print("[red]Error:[/] No valid faces detected in any of the images.")
+            return
+
+        # Persist to database
+        session_factory = get_session_factory(settings.database_url)
+        async with session_factory() as session:
+            from cortexia.db.repositories.identity_repo import IdentityRepository
+            from cortexia.db.repositories.vector_repo import VectorRepository
+
+            identity_repo = IdentityRepository(session)
+            vector_repo = VectorRepository(session)
+
+            identity = await identity_repo.create(name=name)
+            for emb, img_hash in embeddings:
+                await vector_repo.add_embedding(
+                    identity_id=identity.id,
+                    embedding=emb,
+                    source_image_hash=img_hash,
+                )
+            await session.commit()
+
+        console.print(f"\n[bold green]Enrolled[/] {name} (id={identity.id}) with {len(embeddings)} face embedding(s)")
 
     asyncio.run(_enroll())
 
@@ -108,9 +141,12 @@ def recognize(image: str):
     """Recognize faces in an image."""
     import cv2
 
-    from cortexia.core.trust_pipeline import TrustPipeline
+    from cortexia.config import get_settings
+    from cortexia.core.trust_pipeline import PipelineConfig, TrustPipeline
 
-    pipeline = TrustPipeline()
+    settings = get_settings()
+    config = PipelineConfig.from_settings(settings)
+    pipeline = TrustPipeline(config)
     pipeline.initialize()
 
     img = cv2.imread(image)

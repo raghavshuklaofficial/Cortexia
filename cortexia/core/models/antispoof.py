@@ -7,8 +7,9 @@ distribution to distinguish live faces from:
   - Screen replay attacks (phone/tablet displaying a face)
   - Paper mask attacks
 
-Uses a lightweight MobileNetV3-based binary classifier trained on
-LCC FASD and NUAA datasets, with a texture analysis fallback.
+Uses a purely heuristic approach combining LBP texture analysis,
+frequency-domain checks, and color-space analysis. No neural network
+model is loaded — all checks are computed algorithmically.
 """
 
 from __future__ import annotations

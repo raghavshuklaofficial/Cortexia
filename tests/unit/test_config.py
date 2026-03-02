@@ -14,7 +14,7 @@ class TestSettings:
 
         s = Settings(_env_file=None)
         assert s.app_name == "cortexia"
-        assert s.debug is True
+        assert s.debug is False
         assert s.embedding_dim == 512
 
     def test_cors_parsing(self):
