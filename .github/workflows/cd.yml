@@ -1,6 +1,4 @@
-# ═══════════════════════════════════════════════════════════
-#  CORTEXIA CD — Publish to GitHub Container Registry
-# ═══════════════════════════════════════════════════════════
+# CD -- publish docker images to GHCR on tagged releases
 
 name: CD
 

@@ -1,5 +1,4 @@
-"""Services layer for CORTEXIA business logic.
+"""Services layer.
 
-Placeholder package — service modules will be added here as the
-business-logic layer evolves.
+Placeholder -- will add service modules here as needed.
 """

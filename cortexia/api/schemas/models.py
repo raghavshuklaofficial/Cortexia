@@ -1,8 +1,6 @@
 """
-Pydantic schemas for all CORTEXIA API request/response models.
-
-These schemas define the contract between the API and clients.
-All responses use consistent envelope structure.
+Pydantic schemas for API request/response models.
+All responses use the same envelope structure (ApiResponse).
 """
 
 from __future__ import annotations
@@ -12,7 +10,7 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 
-# ─── Common ──────────────────────────────────────────────────
+# --- Common ---
 
 
 class PaginationMeta(BaseModel):
@@ -33,7 +31,7 @@ class ApiResponse(BaseModel):
     meta: dict | None = None
 
 
-# ─── Identity Schemas ────────────────────────────────────────
+# --- Identity ---
 
 
 class IdentityCreate(BaseModel):
@@ -73,7 +71,7 @@ class IdentityListResponse(BaseModel):
     pagination: PaginationMeta
 
 
-# ─── Recognition Schemas ─────────────────────────────────────
+# --- Recognition ---
 
 
 class BoundingBoxSchema(BaseModel):
@@ -137,7 +135,7 @@ class RecognitionResponse(BaseModel):
     frame_dimensions: dict[str, int]
 
 
-# ─── Event Schemas ───────────────────────────────────────────
+# --- Events ---
 
 
 class RecognitionEventResponse(BaseModel):
@@ -165,7 +163,7 @@ class EventListResponse(BaseModel):
     pagination: PaginationMeta
 
 
-# ─── Analytics Schemas ───────────────────────────────────────
+# --- Analytics ---
 
 
 class OverviewStats(BaseModel):
@@ -198,7 +196,7 @@ class DemographicsResponse(BaseModel):
     emotion_distribution: dict[str, int]
 
 
-# ─── Cluster Schemas ─────────────────────────────────────────
+# --- Clusters ---
 
 
 class ClusterResponse(BaseModel):
@@ -219,7 +217,7 @@ class ClusterAssignRequest(BaseModel):
     new_identity_name: str | None = None
 
 
-# ─── Forensics Schemas ───────────────────────────────────────
+# --- Forensics ---
 
 
 class ForensicAnalysisResponse(BaseModel):
@@ -233,7 +231,7 @@ class ForensicAnalysisResponse(BaseModel):
     processing_time_ms: float = 0.0
 
 
-# ─── System Schemas ──────────────────────────────────────────
+# --- System ---
 
 
 class HealthResponse(BaseModel):

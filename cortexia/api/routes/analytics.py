@@ -1,6 +1,4 @@
-"""
-Analytics routes — dashboard statistics and insights.
-"""
+"""Analytics routes for the dashboard."""
 
 from __future__ import annotations
 

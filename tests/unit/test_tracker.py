@@ -1,5 +1,5 @@
 """
-Unit tests for cortexia.core.tracker — multi-face tracking (SORT-inspired).
+Tracker tests (IOU-based SORT).
 """
 
 import numpy as np

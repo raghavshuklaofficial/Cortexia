@@ -1,10 +1,10 @@
 """
-Face recognition engine with Platt-scaled confidence calibration.
+Face recognition with Platt-scaled confidence.
 
-Matches face embeddings against a database of known identities using
-cosine similarity. Unlike raw thresholding, CORTEXIA uses Platt scaling
-to convert distances into calibrated probabilities — so a confidence of
-0.92 genuinely means ~92% probability of correct match.
+Matches embeddings against a gallery of known identities via cosine
+similarity. Raw distances get calibrated through Platt scaling so the
+confidence numbers actually mean something (e.g. 0.92 ~ 92% chance
+of correct match).
 """
 
 from __future__ import annotations
@@ -45,13 +45,10 @@ class StoredIdentity:
 
 
 class PlattCalibrator:
-    """Platt scaling for converting raw cosine distances to probabilities.
+    """Sigmoid calibration for cosine similarity -> probability.
 
-    Fits a sigmoid function: P(match) = 1 / (1 + exp(A * distance + B))
-    where A and B are learned from a calibration dataset.
-
-    For cases without calibration data, uses empirically tuned defaults
-    based on ArcFace embedding characteristics.
+    Default params are tuned for ArcFace 512-d embeddings where:
+    same-person similarity ~ 0.5-0.9, different-person ~ -0.1-0.3
     """
 
     def __init__(self, a: float = -15.0, b: float = 6.5) -> None:
@@ -81,13 +78,9 @@ class PlattCalibrator:
 
 
 class FaceRecognizer:
-    """Matches face embeddings against enrolled identities.
+    """Matches face embeddings against enrolled gallery.
 
-    Features:
-    - Cosine similarity matching with configurable threshold
-    - Platt-scaled confidence calibration
-    - Top-K candidate retrieval
-    - Explicit unknown face handling
+    Uses cosine similarity with Platt-calibrated confidence.
     """
 
     def __init__(
@@ -166,8 +159,8 @@ class FaceRecognizer:
                 is_known=False,
             )
 
-        # Compute cosine similarity against all gallery embeddings
-        # Collect (similarity, identity) candidates
+        # Compute similarity against all gallery entries
+        # TODO: use a proper ANN index (FAISS/hnswlib) when gallery > 10k
         candidates: list[tuple[float, StoredIdentity]] = []
 
         with self._lock:

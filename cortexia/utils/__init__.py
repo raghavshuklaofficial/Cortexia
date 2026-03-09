@@ -1,1 +1,1 @@
-"""Utility modules for CORTEXIA."""
+"""Utility modules."""

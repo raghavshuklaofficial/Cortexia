@@ -1,4 +1,4 @@
-"""Application configuration via environment variables."""
+"""App configuration. Reads from env vars / .env file."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    """Central configuration loaded from environment / .env file."""
+    """All config fields. Pydantic-settings handles env var loading."""
 
     # Application
     app_name: str = "cortexia"
@@ -91,5 +91,5 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
-    """Cached settings singleton."""
+    """Return cached settings instance."""
     return Settings()

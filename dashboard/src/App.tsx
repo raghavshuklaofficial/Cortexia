@@ -1,5 +1,5 @@
 /**
- * CORTEXIA Dashboard — Main App with routing.
+ * Main App with routing.
  */
 
 import { Routes, Route } from "react-router-dom";

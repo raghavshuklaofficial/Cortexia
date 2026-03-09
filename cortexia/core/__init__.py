@@ -1,1 +1,1 @@
-"""Core ML engine for CORTEXIA face intelligence."""
+"""Core ML modules -- detection, embedding, recognition, etc."""

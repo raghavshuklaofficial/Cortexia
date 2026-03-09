@@ -1,6 +1,4 @@
-"""
-Identity repository — CRUD operations for enrolled identities.
-"""
+"""Identity repository — CRUD for enrolled people."""
 
 from __future__ import annotations
 

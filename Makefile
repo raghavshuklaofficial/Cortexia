@@ -3,7 +3,7 @@
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
-# ─── Development ────────────────────────────────────────────
+# -- dev --
 
 dev: ## Start all services in development mode
 	docker compose -f docker-compose.yml up --build
@@ -23,7 +23,7 @@ logs: ## Tail logs from all services
 shell: ## Open a shell in the API container
 	docker compose -f docker-compose.yml exec api bash
 
-# ─── Database ───────────────────────────────────────────────
+# -- database --
 
 migrate: ## Run database migrations
 	docker compose -f docker-compose.yml exec api alembic upgrade head
@@ -34,7 +34,7 @@ migrate-create: ## Create a new migration (usage: make migrate-create MSG="descr
 seed: ## Seed the database with sample data
 	docker compose -f docker-compose.yml exec api python scripts/seed_data.py
 
-# ─── Quality ────────────────────────────────────────────────
+# -- quality --
 
 test: ## Run all tests
 	docker compose -f docker-compose.yml exec api pytest tests/ -v
@@ -55,12 +55,12 @@ format: ## Format code (black + ruff)
 typecheck: ## Run type checker (mypy)
 	docker compose -f docker-compose.yml exec api mypy cortexia/
 
-# ─── ML Models ──────────────────────────────────────────────
+# -- models --
 
 download-models: ## Download ML model weights
 	docker compose -f docker-compose.yml exec api python -m scripts.setup_models
 
-# ─── Cleanup ────────────────────────────────────────────────
+# -- cleanup --
 
 clean: ## Remove all containers, volumes, and build artifacts
 	docker compose -f docker-compose.yml down -v --rmi local

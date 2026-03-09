@@ -1,5 +1,5 @@
 """
-Test fixtures and configuration for CORTEXIA test suite.
+Shared fixtures for the test suite.
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ import numpy as np
 import pytest
 import pytest_asyncio
 
-# ─── Async event loop ────────────────────────────────────────────────────
+# -- Async event loop --
 
 
 @pytest.fixture(scope="session")
@@ -24,7 +24,7 @@ def event_loop() -> Generator:
     loop.close()
 
 
-# ─── Synthetic face data ─────────────────────────────────────────────────
+# -- Synthetic face data --
 
 
 @pytest.fixture
@@ -70,7 +70,7 @@ def identity_id() -> str:
     return str(uuid.uuid4())
 
 
-# ─── Mock pipeline components ────────────────────────────────────────────
+# -- Mock pipeline components --
 
 
 @pytest.fixture

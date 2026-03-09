@@ -1,5 +1,5 @@
 """
-FastAPI dependency injection providers.
+FastAPI dependency injection.
 """
 
 from __future__ import annotations

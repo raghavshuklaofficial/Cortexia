@@ -1,5 +1,5 @@
 /**
- * CORTEXIA API client — typed HTTP methods for backend communication.
+ * API client for the backend.
  */
 
 const API_BASE = "/api/v1";
@@ -70,7 +70,7 @@ export const api = {
     request<T>("POST", path, formData, options),
 };
 
-// ─── Typed API Methods ─────────────────────────────────────────────────
+// -- Types and API methods --
 
 export interface Identity {
   id: number;
@@ -209,7 +209,7 @@ export interface ForensicAnalysisResult {
   processing_time_ms: number;
 }
 
-// ─── Domain-specific API calls ──────────────────────────────────────────
+// -- Domain-specific wrappers --
 
 export const cortexiaApi = {
   // Health

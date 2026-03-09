@@ -1,6 +1,4 @@
-"""
-Structured logging configuration for CORTEXIA.
-"""
+"""Logging setup using structlog."""
 
 from __future__ import annotations
 

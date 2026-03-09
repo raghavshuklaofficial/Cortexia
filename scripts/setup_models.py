@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """
-CORTEXIA — Model Setup Script.
+Download InsightFace buffalo_l model weights.
 
-Downloads and caches the InsightFace buffalo_l model pack
-required by the Trust Pipeline (RetinaFace detector + ArcFace embedder).
+Downloads the RetinaFace + ArcFace models needed by the recognition pipeline.
 
 Usage:
     python scripts/setup_models.py
@@ -17,7 +16,7 @@ from pathlib import Path
 
 def main():
     print("=" * 60)
-    print("  CORTEXIA — Model Setup")
+    print("  Model Setup")
     print("=" * 60)
     print()
 

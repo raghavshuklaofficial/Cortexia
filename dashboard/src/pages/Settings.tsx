@@ -93,7 +93,7 @@ export default function SettingsPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
               <Cpu className="h-4 w-4" />
-              About CORTEXIA
+              About Cortexia
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-sm">

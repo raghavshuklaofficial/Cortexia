@@ -1,6 +1,4 @@
-"""
-Recognition events repository — audit trail of all recognition actions.
-"""
+"""Event repository — audit trail queries."""
 
 from __future__ import annotations
 

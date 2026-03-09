@@ -1,17 +1,9 @@
 """
-Zero-Shot Identity Discovery via HDBSCAN clustering.
+HDBSCAN-based identity discovery.
 
-Automatically groups unknown face embeddings into identity clusters
-WITHOUT requiring any enrollment. This enables:
-  - "Who are the unknown people appearing repeatedly?"
-  - "How many distinct unknown individuals are there?"
-  - "Should any of these clusters be enrolled as identities?"
-
-Uses HDBSCAN (Hierarchical Density-Based Spatial Clustering of
-Applications with Noise) which:
-  - Does NOT require knowing the number of clusters in advance
-  - Handles noise/outliers (transient faces that appear once)
-  - Works well with high-dimensional embedding spaces
+Groups unknown face embeddings into clusters without needing to know
+how many people there are. Useful for answering "who are the unknown
+faces that keep showing up?" without any enrollment.
 """
 
 from __future__ import annotations
@@ -71,10 +63,9 @@ class ClusteringResult:
 
 
 class IdentityClusterer:
-    """HDBSCAN-based face identity discovery.
+    """HDBSCAN clustering on face embeddings.
 
-    Groups face embeddings by identity without knowing the number
-    of distinct people in advance.
+    Groups faces by identity without knowing how many distinct people exist.
     """
 
     def __init__(

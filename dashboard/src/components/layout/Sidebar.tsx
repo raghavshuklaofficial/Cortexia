@@ -44,7 +44,7 @@ export function Sidebar() {
         {sidebarOpen && (
           <div className="flex items-center gap-2">
             <Brain className="h-7 w-7 text-cortexia-500" />
-            <span className="text-lg font-bold tracking-wide">CORTEXIA</span>
+            <span className="text-lg font-bold tracking-wide">Cortexia</span>
           </div>
         )}
         <Button

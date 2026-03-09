@@ -1,6 +1,4 @@
-"""
-Recognition routes — upload images for face analysis.
-"""
+"""Recognition endpoint — upload an image, get face analysis back."""
 
 from __future__ import annotations
 

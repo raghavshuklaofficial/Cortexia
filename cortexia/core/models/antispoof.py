@@ -1,15 +1,11 @@
 """
-Anti-spoofing liveness detection for CORTEXIA Trust Pipeline.
+Anti-spoofing / liveness detection.
 
-Analyzes texture patterns, frequency-domain features, and color
-distribution to distinguish live faces from:
-  - Printed photos
-  - Screen replay attacks (phone/tablet displaying a face)
-  - Paper mask attacks
+Heuristic approach combining FFT frequency analysis, YCrCb color
+checks, LBP texture analysis, and moiré pattern detection. No neural
+network needed -- everything is computed algorithmically.
 
-Uses a purely heuristic approach combining LBP texture analysis,
-frequency-domain checks, and color-space analysis. No neural network
-model is loaded — all checks are computed algorithmically.
+Handles: printed photos, screen replay attacks, paper masks.
 """
 
 from __future__ import annotations
@@ -28,15 +24,15 @@ logger = structlog.get_logger(__name__)
 
 
 class AntiSpoofDetector:
-    """Multi-method anti-spoofing detector.
+    """Multi-method liveness detector.
 
-    Combines multiple heuristic and learned signals:
-    1. Frequency domain analysis (FFT) — screens have periodic patterns
-    2. Color space analysis — printed photos have different color distribution
-    3. Texture analysis (LBP variance) — live faces have more texture variation
-    4. Moiré pattern detection — screens produce characteristic patterns
+    Combines FFT frequency analysis, YCrCb color checks, LBP texture,
+    and moiré pattern detection. Each method votes independently, then
+    we take a weighted ensemble score.
 
-    Each method votes on liveness; final verdict is ensemble majority.
+    TODO: train a small CNN for this instead of heuristics -- the
+    frequency analysis is good but the color check has too many false
+    positives on certain skin tones
     """
 
     def __init__(self, threshold: float = 0.7) -> None:
@@ -117,11 +113,7 @@ class AntiSpoofDetector:
         return result
 
     def _frequency_analysis(self, face: NDArray[np.uint8]) -> float:
-        """Analyze frequency domain for screen replay artifacts.
-
-        Screens and printers introduce periodic patterns visible in FFT.
-        Live faces have a smoother, more natural frequency distribution.
-        """
+        """FFT-based check for screen/print artifacts."""
         gray = cv2.cvtColor(face, cv2.COLOR_BGR2GRAY).astype(np.float32)
 
         # 2D FFT
@@ -156,11 +148,7 @@ class AntiSpoofDetector:
             return max(0.0, 1.0 - abs(ratio - 0.42) * 3)
 
     def _color_analysis(self, face: NDArray[np.uint8]) -> float:
-        """Analyze color distribution for print/screen artifacts.
-
-        Live faces have characteristic skin color distribution in YCrCb space.
-        Printed photos and screens alter this distribution.
-        """
+        """Check YCrCb chroma distribution for print/screen artifacts."""
         ycrcb = cv2.cvtColor(face, cv2.COLOR_BGR2YCrCb)
 
         # Analyze Cr and Cb channels (chroma)
@@ -194,11 +182,8 @@ class AntiSpoofDetector:
         return min(1.0, max(0.0, score))
 
     def _texture_analysis(self, face: NDArray[np.uint8]) -> float:
-        """Analyze micro-texture using Local Binary Pattern variance.
-
-        Live faces have rich micro-texture from pores, fine wrinkles, etc.
-        Printed faces lose this detail; screens add pixel-grid artifacts.
-        """
+        """LBP variance check. Live faces have richer micro-texture."""
+        # FIXME: this needs better calibration for different camera qualities
         gray = cv2.cvtColor(face, cv2.COLOR_BGR2GRAY)
 
         # Compute LBP-like texture measure using Laplacian variance

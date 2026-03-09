@@ -1,5 +1,5 @@
-# Cortexia — Face Intelligence Platform
-# Usage: copy .env.example to .env, fill secrets, then run: docker compose up
+# docker compose setup for cortexia
+# copy .env.example to .env, fill secrets, then: docker compose up
 
 services:
   # PostgreSQL + pgvector

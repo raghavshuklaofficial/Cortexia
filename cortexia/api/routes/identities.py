@@ -1,6 +1,4 @@
-"""
-Identity management routes — CRUD for enrolled people.
-"""
+"""Identity CRUD routes."""
 
 from __future__ import annotations
 

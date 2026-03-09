@@ -1,6 +1,4 @@
-"""
-Health, readiness, and system info routes.
-"""
+"""Health, readiness, and system info endpoints."""
 
 from __future__ import annotations
 

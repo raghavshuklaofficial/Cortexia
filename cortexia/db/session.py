@@ -1,7 +1,5 @@
 """
-Async database session management for CORTEXIA.
-
-Uses SQLAlchemy 2.0 async engine with asyncpg driver for PostgreSQL.
+Async DB session management. SQLAlchemy 2.0 + asyncpg.
 """
 
 from __future__ import annotations

@@ -1,11 +1,11 @@
 """
-SQLAlchemy ORM models for CORTEXIA.
+SQLAlchemy ORM models.
 
 Tables:
-  - identities: Enrolled people with metadata
-  - face_embeddings: 512-d vectors stored via pgvector
-  - recognition_events: Immutable audit log of all recognitions
-  - clusters: Auto-discovered identity groupings
+  - identities: enrolled people
+  - face_embeddings: 512-d vectors (pgvector)
+  - recognition_events: immutable audit log
+  - clusters: auto-discovered groupings
 """
 
 from __future__ import annotations
@@ -29,20 +29,11 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
 class Base(DeclarativeBase):
-    """Base class for all CORTEXIA ORM models."""
-
     pass
 
 
 class Identity(Base):
-    """An enrolled person in the CORTEXIA system.
-
-    Attributes:
-        name: Display name of the person
-        metadata_json: Flexible JSON metadata (department, role, etc.)
-        privacy_score: Computed data footprint score (0-1)
-        is_active: Soft delete flag
-    """
+    """An enrolled person."""
 
     __tablename__ = "identities"
 
@@ -71,15 +62,7 @@ class Identity(Base):
 
 
 class FaceEmbedding(Base):
-    """A 512-d face embedding vector linked to an identity.
-
-    Uses pgvector for efficient similarity search. Each identity
-    can have multiple embeddings (different photos, angles, lighting).
-
-    Attributes:
-        embedding: 512-d float vector stored via pgvector
-        source_image_hash: SHA256 of the source image for dedup
-    """
+    """512-d face vector stored via pgvector. Each identity can have multiple."""
 
     __tablename__ = "face_embeddings"
 

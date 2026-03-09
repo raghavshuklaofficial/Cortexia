@@ -1,1 +1,1 @@
-"""CORTEXIA API package."""
+"""API package."""

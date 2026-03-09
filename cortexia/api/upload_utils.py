@@ -1,4 +1,4 @@
-"""Validation helpers for image uploads."""
+"""Image upload validation helpers."""
 
 from __future__ import annotations
 

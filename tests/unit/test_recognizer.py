@@ -1,5 +1,5 @@
 """
-Unit tests for cortexia.core.recognizer — identity matching & Platt calibration.
+Tests for recognition pipeline + Platt calibration.
 """
 
 import numpy as np

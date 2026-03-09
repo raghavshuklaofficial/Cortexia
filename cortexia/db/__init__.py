@@ -1,1 +1,1 @@
-"""Database layer for CORTEXIA."""
+"""Database layer."""

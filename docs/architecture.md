@@ -1,10 +1,8 @@
-# CORTEXIA — Architecture & System Design
+# Architecture Notes
 
-## Overview
+## High-level overview
 
-CORTEXIA is a neural face intelligence platform built as a production-grade system. This document details the architectural decisions, system design patterns, and technical rationale behind each component.
-
-## System Architecture
+The system has 6 services running behind nginx, all in Docker:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -32,11 +30,11 @@ CORTEXIA is a neural face intelligence platform built as a production-grade syst
 └─────────────────────────────────────────────────────────────┘
 ```
 
-## Trust Pipeline — The Core Innovation
+Only nginx is exposed to the internet. Everything else talks over an internal docker network.
 
-Every face detected by CORTEXIA passes through a multi-stage **Trust Pipeline** that produces a calibrated trust score. This is the system's central architectural concept.
+## Trust Pipeline
 
-### Pipeline Stages
+This is the main idea. Every face goes through a sequence of stages and gets a combined trust score at the end:
 
 ```
 Frame → Detection → Alignment → Liveness → Embedding → Recognition → Attributes
@@ -44,40 +42,41 @@ Frame → Detection → Alignment → Liveness → Embedding → Recognition →
                                                               Trust Score ◄
 ```
 
-1. **Detection (RetinaFace)**: Multi-scale face detection with 5-point landmark localization. Returns bounding boxes and confidence scores.
+### Stages
 
-2. **Alignment (ArcFace Reference)**: Similarity transform to canonical 112×112 crop using 5 landmarks (2 eyes, nose, 2 mouth corners). This normalization is critical for embedding quality.
+1. **Detection (RetinaFace)** -- 5-point landmark detection + bounding boxes. Pretty standard.
 
-3. **Liveness (Heuristic Ensemble)**: Four independent anti-spoofing analyses (no neural network model — all algorithmic):
-   - **Frequency Analysis (FFT)**: Detects screen/print artifacts via high-frequency energy ratios
-   - **Color Analysis (YCrCb)**: Measures chroma distribution anomalies
-   - **Texture Analysis (Laplacian + Sobel)**: Evaluates surface texture naturalness
-   - **Moiré Detection (Autocorrelation)**: Finds periodic patterns from screen capture
+2. **Alignment** -- Similarity transform to 112x112 crop using the 5 landmarks. This is important for the embeddings to work well.
 
-   Weighted ensemble: `0.30·freq + 0.20·color + 0.30·texture + 0.20·moiré`
+3. **Liveness check** -- This is the part I'm most unsure about. It's all heuristic, no neural network:
+   - FFT frequency analysis (catches screen/print patterns)
+   - YCrCb color distribution (printed photos look different)
+   - Laplacian + Sobel texture check (live skin has more micro-texture)
+   - Autocorrelation moiré detection (screen capture artifacts)
 
-4. **Embedding (ArcFace buffalo_l)**: 512-dimensional L2-normalized feature vector. Uses InsightFace's buffalo_l model which achieves 99.83% on LFW benchmark.
+   Weights: `0.30*freq + 0.20*color + 0.30*texture + 0.20*moire`
 
-5. **Recognition (Cosine + Platt)**: Compares embedding against enrolled gallery. Raw cosine similarity is calibrated via Platt Scaling:
+   Works okay for obvious attacks but a proper CNN would be better for serious use (see TODO in antispoof.py).
+
+4. **Embedding (ArcFace buffalo_l)** -- 512-d L2-normalized vector. InsightFace's pretrained model.
+
+5. **Recognition** -- Cosine similarity against the enrolled gallery, then Platt scaling to get a calibrated probability:
    ```
-   P(match) = 1 / (1 + exp(A·(1-sim) + B))
-   where A = -15.0, B = 6.5 (fitted parameters)
+   P(match) = 1 / (1 + exp(A*(1-sim) + B))
+   # A = -15.0, B = 6.5 -- fitted manually, should be done properly on a validation set
    ```
 
-6. **Attributes**: Age, gender (via InsightFace genderage module), and emotion (heuristic feature analysis).
+6. **Attributes** -- Age, gender from InsightFace's genderage module. Emotion is heuristic (not great tbh).
 
-### Trust Score Composition
+### Trust score formula
 
 ```
-trust = w₁·detection_conf + w₂·liveness_conf + w₃·recognition_conf
-# Defaults: w₁=0.20, w₂=0.40, w₃=0.40 (configurable via Settings)
+trust = 0.20*detection_conf + 0.40*liveness_conf + 0.40*recognition_conf
 if spoof_detected:
-    trust *= 0.3  # Heavy penalty
+    trust *= 0.3  # penalize hard
 ```
 
-## Database Design
-
-### Entity Relationship
+## Database
 
 ```
 Identity (1) ──── (N) FaceEmbedding
@@ -87,116 +86,96 @@ Identity (1) ──── (N) FaceEmbedding
 Cluster (1) ──── (N) ClusterMember
 ```
 
-### pgvector Integration
+Embeddings are stored as `Vector(512)` in pgvector with an IVFFlat index (cosine distance). This gives pretty fast nearest-neighbor search and keeps everything in Postgres instead of needing a separate vector DB.
 
-Face embeddings are stored as `Vector(512)` columns with an IVFFlat index using cosine distance (`vector_cosine_ops`). This enables:
-- Sub-millisecond nearest-neighbor search on 100K+ embeddings
-- Native PostgreSQL ACID guarantees for embedding storage
-- Efficient batch operations via standard SQL
+Recognition events are append-only -- no updates or deletes in the app code. Useful for audit trails.
 
-### Immutable Audit Trail
+## API endpoints
 
-`RecognitionEvent` records are append-only (no UPDATE/DELETE in application code), creating a forensic audit trail of all recognition activity. Events include:
-- Timestamp, source, identity match
-- Trust score, spoof flag
-- Full attributes JSON (age, gender, emotion)
+REST + one WebSocket for the live stream:
 
-## API Design
+| Endpoint | Method | What it does |
+|----------|--------|-------------|
+| `/api/v1/identities` | CRUD | Manage enrolled people |
+| `/api/v1/recognize` | POST | Recognize a face from an image upload |
+| `/api/v1/streams/webcam` | WS | Live video from browser webcam |
+| `/api/v1/forensics/*` | POST | Detailed liveness analysis |
+| `/api/v1/clusters/*` | GET/POST | Run/view HDBSCAN clustering |
+| `/api/v1/analytics/*` | GET | Stats and demographics |
+| `/api/v1/events` | GET | Query the event log |
+| `/api/v1/health` | GET | Health check |
+| `/api/v1/ready` | GET | Readiness check |
 
-RESTful + WebSocket hybrid:
+## Background tasks (Celery)
 
-| Endpoint | Method | Purpose |
-|----------|--------|---------|
-| `/api/v1/identities` | CRUD | Identity management |
-| `/api/v1/recognize` | POST | Single-image recognition |
-| `/api/v1/streams/webcam` | WS | Real-time video analysis |
-| `/api/v1/forensics/*` | POST | Deep liveness analysis |
-| `/api/v1/clusters/*` | GET/POST | HDBSCAN clustering |
-| `/api/v1/analytics/*` | GET | Metrics & demographics |
-| `/api/v1/events` | GET | Audit log query |
-| `/api/v1/health` | GET | Liveness probe |
-| `/api/v1/ready` | GET | Readiness probe |
+- Batch recognition for queued images
+- Re-clustering every 6 hours (HDBSCAN on all embeddings)
+- Event cleanup (GDPR retention)
+- Gallery pre-loading into memory (hourly)
 
-## Background Processing
+## Security
 
-Celery workers handle:
-- **Batch recognition**: Process queued image batches
-- **Re-clustering**: Periodic HDBSCAN on all embeddings (every 6h)
-- **Data cleanup**: Remove events past retention period (daily, GDPR)
-- **Gallery warming**: Pre-load identity gallery into memory (hourly)
+### Auth
 
-## Security Architecture
+API key required on every request (`X-API-Key` header). The app won't start without `API_KEY` and `SECRET_KEY` set. WebSocket auth is via query param token, validated before the connection opens. Max 5 concurrent WS connections.
 
-### Authentication & Access Control
+### Network
 
-1. **API Key Authentication**: Required on every endpoint via `X-API-Key` header. The app refuses to start without `API_KEY` and `SECRET_KEY` set in production mode.
-2. **WebSocket Authentication**: Token-based via query parameter (`?token=`), validated before the connection is accepted. Max 5 concurrent WebSocket connections to prevent resource exhaustion.
-3. **Startup Validation**: The application checks for required secrets at boot and fails fast if they're missing.
+- Nginx does TLS termination (self-signed certs for now, easy to swap to Let's Encrypt)
+- Rate limiting at nginx level: 30 req/s general, 5 req/s uploads, 2 conn/s websocket
+- Standard security headers (HSTS, CSP, X-Frame-Options, etc)
+- CORS with explicit allowlists, no wildcards
 
-### Network Security
+### Docker/infra
 
-4. **TLS/HTTPS**: Self-signed certificates for raw IP deploys (with documented upgrade path to Let's Encrypt). HTTP automatically redirects to HTTPS.
-5. **Rate Limiting**: Nginx-level rate limiting across three zones:
-   - General API: 30 requests/sec (burst 50)
-   - Uploads: 5 requests/sec (burst 10)
-   - WebSocket: 2 connections/sec (burst 5)
-6. **Security Headers**: HSTS, Content-Security-Policy, Permissions-Policy, X-Frame-Options, X-Content-Type-Options, Referrer-Policy. Server tokens disabled.
-7. **CORS**: Explicit method and header allowlists (no wildcards).
+- Only nginx exposes ports. Postgres, Redis, API, workers are all internal.
+- Two docker networks: frontend (nginx) and backend (everything). Nginx bridges both.
+- CPU/memory limits on all containers
+- Nginx and dashboard containers use read-only filesystems
+- `no-new-privileges` on all containers
+- Redis is password-protected
 
-### Container Hardening
+### App-level
 
-8. **Internal-only Services**: Only nginx is exposed externally (ports 80/443). PostgreSQL, Redis, API, and workers communicate on the backend Docker network.
-9. **Network Segmentation**: Two Docker networks — `frontend` (bridge, nginx only) and `backend` (bridge, all services). Only nginx bridges both networks.
-10. **Resource Limits**: CPU and memory limits on every container to prevent runaway processes.
-11. **Read-only Filesystems**: Nginx and dashboard containers run with `read_only: true` and `tmpfs` mounts for temp data.
-12. **Privilege Restrictions**: All containers run with `no-new-privileges` security option.
-13. **Redis Authentication**: Password-protected, not exposed outside the Docker network.
+- Upload validation checks magic bytes (not just extension), 10MB max
+- Swagger/redoc disabled in production
+- Soft delete by default (GDPR), with hard delete option
+- No PII in logs, log rotation configured (10MB, 5 files)
 
-### Application-Level Security
+### VPS hardening scripts (deploy/)
 
-14. **Upload Validation**: Magic-byte signature checking (JPEG, PNG, BMP, WebP), 10 MB size limit, minimum size enforcement. Applied on all upload endpoints.
-15. **Docs Disabled in Production**: `/docs`, `/redoc`, and `/openapi.json` are blocked with 404 in production. Error details are hidden.
-16. **Soft Delete**: Identities are soft-deleted by default (GDPR right to rectification).
-17. **Hard Delete**: Available for GDPR right to erasure.
-18. **No PII in Logs**: Structured logging without sensitive data. Log rotation on all containers (10 MB max, 5 files).
+The scripts in `deploy/` are for hardening a fresh VPS. In order:
+1. SSH hardening (key-only, custom port, no root)
+2. UFW firewall (default deny, only SSH + HTTP/HTTPS open, botnet ports blocked)
+3. Fail2ban (SSH brute force bans, nginx rate limit abuse)
+4. CrowdSec (community IP blocklists)
+5. Unattended security upgrades
+6. Kernel hardening (SYN cookies, ICMP redirect blocking, reverse path filtering)
 
-### VPS Hardening (deploy/ scripts)
+## Deployment
 
-19. **SSH**: Key-only authentication, custom port, root login disabled, 3 max auth tries, 5-minute idle timeout.
-20. **Firewall (UFW)**: Default deny incoming. Only SSH, HTTP (redirect), and HTTPS allowed. Common botnet ports explicitly blocked (Telnet, TR-069, ADB).
-21. **Fail2ban**: SSH brute force protection (24h ban after 3 attempts), nginx rate limit abuse detection (1h ban).
-22. **CrowdSec**: Community IPS with shared global botnet blocklists. Nginx, SSH, and Linux collections installed.
-23. **Automatic Updates**: Unattended-upgrades for security patches, weekly auto-clean.
-24. **Kernel Hardening**: SYN cookies, ICMP redirect blocking, reverse path filtering, martian packet logging, source routing disabled.
-
-## Deployment Topology
-
-Single `docker compose up` command deploys 6 services across 2 isolated networks:
+`docker compose up` brings up everything. Two networks keep things isolated:
 
 ```
                          Internet
                             │
                      ┌──────┴──────┐
-                     │   Nginx     │ ← Ports 80/443 (only public-facing service)
-                     │  (frontend) │    TLS termination, rate limiting
+                     │   Nginx     │  ports 80/443
                      └──────┬──────┘
                             │
               ┌─────────────┼─────────────┐
               │             │             │      backend network
-    ┌─────────┴──┐  ┌───────┴───────┐  ┌──┴──────────┐  (internal, no internet)
+    ┌─────────┴──┐  ┌───────┴───────┐  ┌──┴──────────┐
     │  Dashboard  │  │  FastAPI API   │  │   Celery    │
-    │  React SPA  │  │  Trust Pipeline│  │   Workers   │
+    │  React SPA  │  │               │  │   Workers   │
     └─────────────┘  └───────┬───────┘  └──┬──────────┘
                              │             │
                     ┌────────┴─────────────┴──────┐
                     │                              │
               ┌─────┴──────┐            ┌─────────┴──┐
               │ PostgreSQL  │            │   Redis     │
-              │ + pgvector  │            │ (auth req.) │
+              │ + pgvector  │            │             │
               └─────────────┘            └─────────────┘
 ```
 
-All services use health checks, restart policies, resource limits, and log rotation for production reliability.
-> **Note**: The backend network is a standard bridge (not `internal`) to allow
-> containers to download ML model weights at first startup. Only nginx
-> exposes ports to the host.
+The backend network isn't set to `internal` because containers need to download ML model weights on first startup. Might change this later and pre-bake models into the image instead.

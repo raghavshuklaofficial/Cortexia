@@ -1,12 +1,8 @@
 """
-Face detection backends for CORTEXIA.
+Face detection backends.
 
-Supports multiple detection backends via a factory pattern:
-  - RetinaFace (via InsightFace) — high accuracy, GPU-capable
-  - MediaPipe — lightweight CPU fallback
-
-Each detector returns a list of DetectedFace objects with aligned crops
-ready for embedding extraction.
+Supports RetinaFace (InsightFace) and MediaPipe as a lighter fallback.
+Both return aligned 112x112 crops ready for embedding extraction.
 """
 
 from __future__ import annotations
@@ -96,13 +92,7 @@ class BaseFaceDetector(ABC):
 
 
 class RetinaFaceDetector(BaseFaceDetector):
-    """High-accuracy face detector using InsightFace's RetinaFace model.
-
-    This is the primary detector for CORTEXIA, offering:
-    - Sub-pixel facial landmark detection (5-point)
-    - Multi-scale face detection
-    - GPU acceleration when available
-    """
+    """Primary detector using InsightFace RetinaFace. GPU-capable."""
 
     def __init__(self, model_name: str = "buffalo_l", ctx_id: int = -1) -> None:
         """Initialize InsightFace model.
@@ -182,13 +172,7 @@ class RetinaFaceDetector(BaseFaceDetector):
 
 
 class MediaPipeDetector(BaseFaceDetector):
-    """Lightweight CPU-friendly face detector using MediaPipe.
-
-    Best for:
-    - Resource-constrained environments
-    - When GPU is unavailable
-    - Quick prototyping / testing
-    """
+    """Lightweight fallback detector. CPU-friendly, good for testing."""
 
     def __init__(self, min_detection_confidence: float = 0.5) -> None:
         import mediapipe as mp  # type: ignore[import-untyped]

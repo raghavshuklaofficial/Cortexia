@@ -1,44 +1,22 @@
-<div align="center">
+# Cortexia
 
-# 🧠 CORTEXIA
+Face recognition system with anti-spoofing, clustering, and a full audit trail. Built to go beyond the usual `face_recognition` library demos.
 
-### Neural Face Intelligence Platform
-
-*Production-grade face recognition system with real-time detection, anti-spoofing,*
-*identity clustering, and a forensic audit trail — deployed with one command.*
-
-[![CI](https://github.com/raghavshuklaofficial/cortexia/actions/workflows/ci.yml/badge.svg)](https://github.com/raghavshuklaofficial/cortexia/actions/workflows/ci.yml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-3776AB.svg)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-009688.svg)](https://fastapi.tiangolo.com/)
-[![React](https://img.shields.io/badge/React_18-61DAFB.svg)](https://react.dev/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-[Quick Start](#-quick-start) · [Architecture](#-architecture) · [Features](#-features) · [API](#-api-reference) · [Dashboard](#-dashboard) · [Deployment](#-production-deployment) · [Contributing](#-contributing)
+I built this because I was frustrated with how every face recognition project on GitHub is just a script that wraps `dlib` or `face_recognition` with no real backend, no anti-spoofing, and definitely no production setup. Cortexia is my attempt at building what an actual deployable face intelligence system would look like — proper DB, proper API, proper security.
 
-</div>
+**What it does:**
+- Detects faces (RetinaFace), extracts ArcFace embeddings (512-d), matches against enrolled identities
+- Anti-spoofing pipeline that catches photo/screen attacks using FFT, color, texture, and moiré analysis
+- Confidence scores are Platt-calibrated (not just raw cosine thresholds)
+- HDBSCAN clustering to discover unknown recurring faces automatically
+- React dashboard for live feed, identity management, analytics
+- Full Docker Compose deployment with TLS, rate limiting, hardened containers
 
----
-
-## Why CORTEXIA?
-
-Most face recognition projects are toy scripts. CORTEXIA is what a **production system** looks like:
-
-| Aspect | Typical Project | CORTEXIA |
-|--------|----------------|----------|
-| **Detection** | dlib HOG (2013) | RetinaFace (2019, SOTA) |
-| **Embeddings** | 128-d face_recognition | 512-d ArcFace (99.83% LFW) |
-| **Anti-Spoofing** | None | 4-method ensemble (FFT, color, texture, moiré) |
-| **Confidence** | Raw distance thresholds | Platt-calibrated probabilities |
-| **Clustering** | None | HDBSCAN zero-shot identity discovery |
-| **Database** | Pickle file | PostgreSQL + pgvector (vector search) |
-| **API** | None | FastAPI with WebSocket streaming |
-| **Frontend** | OpenCV window | React + TypeScript dashboard |
-| **Deployment** | `python script.py` | Docker Compose (6 services) |
-| **Security** | None | TLS, API key auth, rate limiting, hardened containers |
-| **Testing** | None | pytest + CI/CD pipeline |
-| **Audit Trail** | None | Immutable forensic event log |
-
-## 🏗 Architecture
+## Architecture
 
 ```
                     ┌──────────────────┐
@@ -60,9 +38,9 @@ Most face recognition projects are toy scripts. CORTEXIA is what a **production 
               └─────────────┘            └─────────────┘
 ```
 
-### Trust Pipeline (Core Innovation)
+### Trust Pipeline
 
-Every face passes through a six-stage pipeline producing a **calibrated trust score**:
+The main thing that differentiates this from other projects. Every face goes through all stages sequentially:
 
 ```
 Frame → Detection → Alignment → Liveness → Embedding → Recognition → Attributes
@@ -70,52 +48,49 @@ Frame → Detection → Alignment → Liveness → Embedding → Recognition →
          (99.4%)      112×112     ensemble    L2-norm     Scaling      Emotion
 ```
 
-**Trust Score** = `w₁·detection + w₂·liveness + w₃·recognition` (default 0.20/0.40/0.40, configurable via `TRUST_WEIGHT_*` env vars; penalized 0.3× for spoofs)
+Trust score is a weighted combination: `0.20 * detection_conf + 0.40 * liveness_conf + 0.40 * recognition_conf`. If the face is detected as a spoof, the score gets multiplied by 0.3 (heavy penalty).
 
-## ✨ Features
+## How it works
 
-### 🔍 Face Detection & Recognition
-- **RetinaFace** detector with automatic GPU/CPU selection
-- **ArcFace buffalo_l** embedder — 512-dimensional, L2-normalized
-- Real-time multi-face tracking (SORT-inspired algorithm)
+### Face Detection & Recognition
+- RetinaFace detector with auto GPU/CPU selection
+- ArcFace buffalo_l embedder (512-d, L2-normalized)
+- Multi-face tracking across video frames (SORT-inspired IoU + embedding matching)
 - Gallery management with centroid-based identity matching
 
-### 🛡 Anti-Spoofing (Liveness Detection)
-- **Frequency Analysis**: FFT-based screen/print artifact detection
-- **Color Analysis**: YCrCb chroma distribution anomaly detection
-- **Texture Analysis**: Laplacian variance + Sobel gradient evaluation
-- **Moiré Detection**: Autocorrelation-based periodic pattern finder
-- Weighted ensemble with configurable thresholds
+### Anti-Spoofing
+I didn't want to train a whole neural net for this, so the liveness detector uses a combination of heuristic signals:
+- **FFT analysis** — screens and printers leave frequency-domain artifacts
+- **YCrCb color analysis** — printed photos have shifted chroma distributions
+- **Texture (LBP variance + Sobel)** — live faces have micro-texture from pores etc
+- **Moiré detection** — autocorrelation picks up the periodic patterns from screens
 
-### 📊 Platt-Calibrated Confidence
-Raw cosine similarity is unreliable as a probability. CORTEXIA uses **Platt Scaling** (sigmoid calibration) to convert distances into meaningful confidence scores:
+Each method scores 0-1, and they're combined with weights (0.30/0.20/0.30/0.20).
+
+### Platt-Calibrated Confidence
+Raw cosine similarity is terrible as a probability estimate. Instead of just thresholding at 0.45, I use Platt scaling to get actual calibrated probabilities:
 ```
-P(match) = 1 / (1 + exp(-15.0·(1-sim) + 6.5))
+P(match) = 1 / (1 + exp(-15.0 * (1 - sim) + 6.5))
 ```
+The parameters (A=-15.0, B=6.5) were tuned empirically on ArcFace embedding distributions.
 
-### 🔬 Zero-Shot Identity Discovery
-HDBSCAN density-based clustering discovers natural identity groupings without specifying cluster count. Runs periodically as a background job to surface unknown recurring faces.
+### Clustering (Zero-Shot Identity Discovery)
+HDBSCAN runs periodically on unknown face embeddings to find recurring people who aren't enrolled. No need to specify cluster count — it figures it out from the density structure.
 
-### 📝 Forensic Audit Trail
-Every recognition event is logged as an immutable record:
-- Timestamp, source, matched identity
-- Trust score, spoof flag, face attributes
-- Queryable by time range, identity, source, verdict
+### Forensic Audit Trail
+Every recognition event goes into an append-only table with timestamp, trust score, spoof flag, matched identity, and face attributes. Queryable by time range, identity, source.
 
-### 🗄 Vector Database
-pgvector extension enables:
-- Sub-millisecond nearest-neighbor search on 100K+ embeddings
-- IVFFlat indexing with cosine distance
-- ACID-compliant face embedding storage
+### Vector Search
+pgvector enables sub-millisecond nearest-neighbor search with IVFFlat indexing + cosine distance. Embeddings are stored as `Vector(512)` columns with full ACID guarantees.
 
-## 🚀 Quick Start
+## Quick Start
 
-### Prerequisites
+### What you need
 
 - Docker & Docker Compose
 - `.env` file with required secrets (see below)
 
-### Setup & Run
+### Setup
 
 ```bash
 git clone https://github.com/raghavshuklaofficial/cortexia.git
@@ -123,27 +98,26 @@ cd cortexia
 cp .env.example .env
 ```
 
-Edit `.env` and fill in the required secrets:
+Generate secrets and put them in `.env`:
 
 ```bash
-# generate these:
-openssl rand -hex 32   # → SECRET_KEY
-openssl rand -hex 32   # → API_KEY
-openssl rand -hex 24   # → POSTGRES_PASSWORD
-openssl rand -hex 16   # → REDIS_PASSWORD
+openssl rand -hex 32   # SECRET_KEY
+openssl rand -hex 32   # API_KEY
+openssl rand -hex 24   # POSTGRES_PASSWORD
+openssl rand -hex 16   # REDIS_PASSWORD
 ```
 
-For local development, set `APP_ENV=development` in `.env`.
+For local dev, set `APP_ENV=development` in `.env`.
 
-Then start everything:
+Then:
 
 ```bash
 docker compose up --build
 ```
 
-Open **https://localhost** for the dashboard (you'll see a cert warning since the default setup uses self-signed TLS).
+Dashboard will be at **https://localhost** (you'll get a cert warning since it uses self-signed TLS by default).
 
-### Services Started
+### Services
 
 | Service | Port | Description |
 |---------|------|-------------|
@@ -153,33 +127,26 @@ Open **https://localhost** for the dashboard (you'll see a cert warning since th
 | PostgreSQL | 5432 (internal) | Database + pgvector |
 | Redis | 6379 (internal) | Celery broker + cache |
 
-> Internal ports are not exposed to the host — all traffic goes through nginx.
+Internal ports only — everything goes through nginx.
 
-### Seed Sample Data
+### Seed sample data
 
 ```bash
 docker compose exec api python scripts/seed_data.py
 ```
 
-### CLI Usage
+### CLI
 
 ```bash
-# Serve the API
-cortexia serve --port 8000
-
-# Enroll a face
+cortexia serve --port 8000       # start API server
 cortexia enroll --name "Alice" --image photos/alice.jpg
-
-# Recognize faces in an image
 cortexia recognize --image test.jpg
-
-# System information
-cortexia info
+cortexia info                    # system info
 ```
 
-## 📡 API Reference
+## API
 
-All API endpoints require the `X-API-Key` header in production.
+All endpoints need `X-API-Key` header in production.
 
 ### Recognition
 
@@ -231,68 +198,47 @@ Response:
 ### Identity Management
 
 ```bash
-# Create identity with face
+# Create
 curl -X POST https://localhost/api/v1/identities \
   -H "X-API-Key: YOUR_API_KEY" \
-  -F "name=Alice" \
-  -F "images=@alice.jpg"
+  -F "name=Alice" -F "images=@alice.jpg"
 
-# List identities
+# List
 curl https://localhost/api/v1/identities?skip=0&limit=20 \
   -H "X-API-Key: YOUR_API_KEY"
 
-# Add more faces
+# Add more face images to existing identity
 curl -X POST https://localhost/api/v1/identities/{id}/faces \
   -H "X-API-Key: YOUR_API_KEY" \
-  -F "images=@photo1.jpg" \
-  -F "images=@photo2.jpg"
+  -F "images=@photo1.jpg" -F "images=@photo2.jpg"
 ```
 
-### WebSocket Streaming
+### WebSocket (Live Feed)
 
 ```javascript
-// token = your API key
 const ws = new WebSocket("wss://localhost/api/v1/streams/webcam?token=YOUR_API_KEY");
-ws.send(JSON.stringify({ type: "FRAME", image: base64Data }));
-ws.onmessage = (event) => {
-  const analysis = JSON.parse(event.data);
-  // { type: "ANALYSIS", faces: [...], processing_time_ms: 35 }
-};
+ws.send(JSON.stringify({ frame: base64JpegData }));
+ws.onmessage = (e) => console.log(JSON.parse(e.data));
+// returns { type: "ANALYSIS", faces: [...], processing_time_ms: 35 }
 ```
 
-### Forensic Analysis
+### Other endpoints
 
 ```bash
 # Liveness check
 curl -X POST https://localhost/api/v1/forensics/liveness \
-  -H "X-API-Key: YOUR_API_KEY" \
-  -F "image=@suspect.jpg"
+  -H "X-API-Key: YOUR_API_KEY" -F "image=@photo.jpg"
 
-# Full forensic analysis
-curl -X POST https://localhost/api/v1/forensics/analyze \
-  -H "X-API-Key: YOUR_API_KEY" \
-  -F "image=@evidence.jpg"
+# Analytics overview
+curl https://localhost/api/v1/analytics/overview -H "X-API-Key: YOUR_API_KEY"
+
+# Timeline
+curl "https://localhost/api/v1/analytics/timeline?days=30" -H "X-API-Key: YOUR_API_KEY"
 ```
 
-### Analytics
+## Dashboard
 
-```bash
-# Overview stats
-curl https://localhost/api/v1/analytics/overview \
-  -H "X-API-Key: YOUR_API_KEY"
-
-# Timeline (last 30 days)
-curl "https://localhost/api/v1/analytics/timeline?days=30" \
-  -H "X-API-Key: YOUR_API_KEY"
-
-# Demographics
-curl https://localhost/api/v1/analytics/demographics \
-  -H "X-API-Key: YOUR_API_KEY"
-```
-
-## 🎨 Dashboard
-
-The React dashboard provides 7 views:
+7 pages in the React frontend:
 
 | Page | Description |
 |------|-------------|
@@ -302,198 +248,114 @@ The React dashboard provides 7 views:
 | **Analytics** | Overview stats, recognition timeline chart, demographic breakdowns |
 | **Clusters** | HDBSCAN zero-shot identity discovery with merge-to-identity |
 | **Forensics** | Deep liveness analysis with component score breakdown |
-| **Settings** | System status, health checks, architecture info |
+| **Settings** | System status, health checks |
 
-## 🔒 Production Deployment
+## Production Deployment
 
-CORTEXIA ships with a full production hardening setup. See `deploy/` for the scripts.
+### Security
 
-### Security features built in
+The whole security setup exists because I deployed this on a raw VPS and immediately got hit by Mozi botnet port scanners 😅 — so yeah, everything is locked down now:
 
-- **TLS/HTTPS** — self-signed certs for IP-based deploys, easy swap to Let's Encrypt
-- **API key auth** — required on every endpoint, including WebSocket (via query param)
-- **Rate limiting** — nginx-level: 30 req/s API, 5 req/s uploads, 2 req/s WebSocket
-- **Security headers** — HSTS, CSP, X-Frame-Options, X-Content-Type-Options, Permissions-Policy
-- **Docker hardening** — internal-only ports, read-only filesystems, resource limits, `no-new-privileges`, network segmentation
-- **Redis auth** — password-protected, not exposed outside Docker network (This was done after i got affected by **Mozi Malware(Botnet Port Scanners)** 😅 previosuly i did not know about it)
-- **Upload validation** — magic-byte checking, 10 MB size limit, format whitelist
-- **No debug in prod** — `/docs`, `/redoc`, `/openapi.json` all disabled; error details hidden
-- **Startup validation** — app refuses to start without `SECRET_KEY` and `API_KEY`
+- TLS/HTTPS with self-signed certs (swap to Let's Encrypt when you have a domain)
+- API key auth on every endpoint including WebSocket
+- Nginx rate limiting (30 req/s API, 5 req/s uploads, 2 req/s WebSocket)
+- Security headers (HSTS, CSP, X-Frame-Options, etc.)
+- Docker hardening — internal-only ports, resource limits, `no-new-privileges`, read-only filesystems where possible
+- Redis is password-protected and not exposed outside the Docker network
+- Upload validation with magic-byte checking, 10 MB size limit
+- `/docs` and `/redoc` disabled in production, error details hidden
+- App won't start without `SECRET_KEY` and `API_KEY` set
 
-### Deploying to a VPS
+### Deploy to a VPS
 
-1. **Harden the VPS** (SSH, firewall, IPS):
+1. Harden the server:
    ```bash
    sudo bash deploy/setup-vps.sh
    ```
-   This sets up: SSH key-only auth on a custom port, UFW firewall (only 80/443/SSH), Fail2ban, CrowdSec community IPS, automatic security updates, and kernel hardening.
+   Sets up SSH key-only auth, UFW firewall, Fail2ban, CrowdSec, auto security updates, kernel hardening.
 
-2. **Generate TLS certs**:
+2. TLS certs:
    ```bash
    bash scripts/generate-certs.sh YOUR_VPS_IP
    ```
 
-3. **Configure and launch**:
+3. Configure and launch:
    ```bash
    cp .env.example .env
    # fill in secrets (see .env.example for instructions)
    docker compose up -d
    ```
 
-4. **Set up backups** (optional but recommended):
+4. Backups (optional):
    ```bash
-   # add to crontab — runs daily at 2 AM
+   # daily at 2 AM via crontab
    0 2 * * * /opt/cortexia/deploy/backup.sh
    ```
 
-### Upgrading to Let's Encrypt
+### Let's Encrypt
 
 When you have a domain:
 ```bash
 apt install certbot python3-certbot-nginx
 certbot certonly --standalone -d yourdomain.com
-# update the cert volume path in docker-compose.yml
+# then update cert paths in docker-compose.yml
 ```
 
-## 🧪 Testing
+## Testing
 
 ```bash
-# Run all tests
-pytest tests/ -v
-
-# Unit tests only
-pytest tests/unit/ -v
-
-# Integration tests (requires DB)
-pytest tests/integration/ -v
-
-# With coverage
-pytest tests/ --cov=cortexia --cov-report=html
+pytest tests/ -v              # all tests
+pytest tests/unit/ -v         # unit only
+pytest tests/integration/ -v  # integration (needs DB)
+pytest tests/ --cov=cortexia --cov-report=html  # with coverage
 ```
 
-## 🛠 Development
+## Dev Setup
 
 ```bash
-# Install in development mode
 pip install -e ".[dev]"
 
-# Lint
-ruff check cortexia/ tests/
+ruff check cortexia/ tests/   # lint
+ruff format cortexia/ tests/  # format
+mypy cortexia/                # type check
 
-# Format
-ruff format cortexia/ tests/
-
-# Type check
-mypy cortexia/
-
-# Or use Make
-make lint
-make test
-make format
+# or just use make
+make lint && make test && make format
 ```
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 cortexia/
-├── cortexia/                   # Python package
-│   ├── core/                   # ML engine
-│   │   ├── detector.py         #   RetinaFace / MediaPipe detection
-│   │   ├── embedder.py         #   ArcFace 512-d embedding extraction
-│   │   ├── recognizer.py       #   Gallery matching + Platt calibration
-│   │   ├── clusterer.py        #   HDBSCAN identity clustering
-│   │   ├── tracker.py          #   Multi-face SORT tracking
-│   │   ├── trust_pipeline.py   #   🔑 Orchestrator (the centerpiece)
-│   │   ├── types.py            #   Core data structures
-│   │   └── models/
-│   │       ├── antispoof.py    #   4-method liveness ensemble
-│   │       └── attributes.py   #   Age, gender, emotion prediction
-│   ├── db/                     # Database layer
-│   │   ├── models.py           #   SQLAlchemy ORM (pgvector)
-│   │   ├── session.py          #   Async engine + session factory
-│   │   ├── repositories/       #   Data access patterns
-│   │   └── migrations/         #   Alembic (async)
-│   ├── api/                    # FastAPI application
-│   │   ├── main.py             #   App factory + lifespan
-│   │   ├── schemas/            #   Pydantic v2 models
-│   │   ├── deps.py             #   Dependency injection
-│   │   ├── upload_utils.py     #   Image upload validation
-│   │   └── routes/             #   8 route modules
-│   ├── workers/                # Celery background tasks
-│   ├── cli.py                  # Click CLI (serve, enroll, recognize)
-│   └── config.py               # Pydantic Settings
-├── dashboard/                  # React 18 + TypeScript + Vite
-│   └── src/
-│       ├── pages/              #   7 page components
-│       ├── components/         #   UI components (shadcn-style)
-│       └── lib/                #   API client, store, utils
-├── docker/                     # Container configs
-│   ├── Dockerfile.api          #   Multi-stage API build
-│   ├── Dockerfile.worker       #   Celery worker
-│   ├── Dockerfile.dashboard    #   Node build → nginx serve
-│   └── nginx.conf              #   TLS + security headers + rate limiting
-├── deploy/                     # VPS hardening & ops scripts
-│   ├── setup-vps.sh            #   Master setup (runs everything below)
-│   ├── 01-ssh-harden.sh        #   SSH key-only, custom port
-│   ├── 02-firewall.sh          #   UFW rules
-│   ├── 03-fail2ban.sh          #   Brute force protection
-│   ├── 04-crowdsec.sh          #   Community IPS
-│   ├── 05-auto-updates.sh      #   Automatic security patches
-│   ├── 06-kernel-harden.sh     #   Sysctl hardening
-│   ├── backup.sh               #   Postgres + Redis backup
-│   └── health-monitor.sh       #   Health check + auto-restart
-├── tests/                      # pytest suite
-│   ├── unit/                   #   Core module tests
-│   └── integration/            #   API endpoint tests
-├── scripts/                    # Utility scripts
-│   ├── generate-certs.sh       #   Self-signed TLS for raw IP deploys
-│   ├── seed_data.py            #   Sample identity loader
-│   └── setup_models.py         #   ML model downloader
-├── docs/                       # Architecture documentation
-├── docker-compose.yml          # One-command deployment
-├── pyproject.toml              # Python project config
-├── Makefile                    # Developer shortcuts
-└── .github/workflows/          # CI/CD pipelines
+├── cortexia/               # python package
+│   ├── core/               # ML pipeline (detector, embedder, recognizer, clusterer, tracker)
+│   │   ├── trust_pipeline.py   # the main orchestrator
+│   │   └── models/         # antispoof + attribute prediction
+│   ├── db/                 # SQLAlchemy + pgvector + alembic migrations
+│   ├── api/                # FastAPI routes, schemas, middleware
+│   ├── workers/            # celery background tasks
+│   ├── cli.py              # click CLI
+│   └── config.py           # pydantic settings
+├── dashboard/              # React 18 + TypeScript + Vite + Tailwind
+├── docker/                 # Dockerfiles + nginx config
+├── deploy/                 # VPS hardening scripts
+├── tests/                  # pytest (unit + integration)
+├── scripts/                # seed data, model download, cert generation
+├── docker-compose.yml
+└── pyproject.toml
 ```
 
-## 🔧 Tech Stack
+## Tech Stack
 
-| Layer | Technology | Why |
-|-------|-----------|-----|
-| **Detection** | RetinaFace (InsightFace) | SOTA accuracy, 5-point landmarks |
-| **Embeddings** | ArcFace buffalo_l | 512-d, 99.83% LFW accuracy |
-| **Anti-Spoof** | Heuristic ensemble | Multi-spectral analysis (FFT, color, texture, moiré) |
-| **Calibration** | Platt Scaling | Mathematically grounded confidence |
-| **Clustering** | HDBSCAN | Density-based, no k parameter needed |
-| **API** | FastAPI | Async, OpenAPI docs, WebSocket support |
-| **ORM** | SQLAlchemy 2.0 (async) | Type-safe, modern async patterns |
-| **Vector DB** | pgvector | SQL-native vector search, ACID |
-| **Queue** | Celery + Redis | Reliable background processing |
-| **Frontend** | React 18 + TypeScript | Type-safe, component-based UI |
-| **Styling** | TailwindCSS + shadcn/ui | Consistent, accessible design system |
-| **Charts** | Recharts | Composable, responsive charts |
-| **State** | Zustand | Minimal, performant state management |
-| **Deployment** | Docker Compose | Reproducible, one-command setup |
-| **CI/CD** | GitHub Actions | Lint, test, build, publish |
+- **ML**: RetinaFace + ArcFace (InsightFace), HDBSCAN, Platt scaling
+- **Backend**: FastAPI, SQLAlchemy 2.0 (async), pgvector, Celery + Redis
+- **Frontend**: React 18, TypeScript, TailwindCSS, Zustand, Recharts
+- **Infra**: Docker Compose, Nginx (TLS + rate limiting), PostgreSQL 16
 
-## 👨‍💻 Author
+## Author
 
-**Raghav Shukla**
-📌 [GitHub Profile](https://github.com/raghavshuklaofficial)
+Raghav Shukla — [GitHub](https://github.com/raghavshuklaofficial)
 
-## 📄 License
+## License
 
-MIT License — see [LICENSE](License) for details.
-
----
-
-<div align="center">
-
-*Named after the fusiform face area in the brain's temporal cortex —*
-*the region responsible for human face recognition.*
-
-</div>
-
-## 🤝 Contributing
-
-Contributions are welcome! Please fork the repository and submit a pull request for any enhancements or bug fixes.
+MIT — see [LICENSE](License).

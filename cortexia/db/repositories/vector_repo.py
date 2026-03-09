@@ -1,6 +1,4 @@
-"""
-Vector search repository — pgvector-powered similarity search.
-"""
+"""Vector search via pgvector."""
 
 from __future__ import annotations
 
@@ -11,7 +9,7 @@ from cortexia.db.models import FaceEmbedding, Identity
 
 
 class VectorRepository:
-    """Handles pgvector similarity search operations."""
+    """Handles pgvector similarity search."""
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
@@ -60,7 +58,8 @@ class VectorRepository:
             List of dicts with identity_id, identity_name, distance, embedding_id
         """
         # pgvector cosine distance: 1 - cosine_similarity
-        # Lower distance = more similar
+        # Lower = more similar
+        # NOTE: should probably switch to HNSW index when gallery gets large
         query_str = (
             "SELECT fe.id, fe.identity_id, i.name, "
             "fe.embedding <=> :query_vec AS distance "

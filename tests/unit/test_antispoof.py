@@ -1,5 +1,5 @@
 """
-Unit tests for cortexia.core.models.antispoof — liveness detection.
+Tests for the anti-spoofing module.
 """
 
 import numpy as np

@@ -1,6 +1,4 @@
-"""
-Cluster routes — zero-shot identity discovery.
-"""
+"""Cluster routes — HDBSCAN identity discovery."""
 
 from __future__ import annotations
 

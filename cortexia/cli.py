@@ -1,11 +1,6 @@
 """
-CORTEXIA CLI — Command-line interface for headless operations.
-
-Usage:
-    cortexia serve        Start the API server
-    cortexia enroll       Enroll a new identity
-    cortexia recognize    Recognize faces in an image
-    cortexia info         Show system information
+CLI for running the server and doing quick enrollments / recognition
+without going through the API.
 """
 
 from __future__ import annotations
@@ -24,7 +19,7 @@ console = Console()
 @click.group()
 @click.version_option(version=__version__, prog_name="cortexia")
 def cli():
-    """CORTEXIA — Neural Face Intelligence Platform."""
+    """Cortexia face recognition CLI."""
     pass
 
 
@@ -34,14 +29,14 @@ def cli():
 @click.option("--workers", default=1, help="Number of workers")
 @click.option("--reload", is_flag=True, help="Enable auto-reload")
 def serve(host: str, port: int, workers: int, reload: bool):
-    """Start the CORTEXIA API server."""
+    """Start the API server."""
     import uvicorn
 
     from cortexia.utils.logging import setup_logging
 
     setup_logging(log_level="INFO")
 
-    console.print(f"[bold green]CORTEXIA[/] v{__version__} starting on {host}:{port}")
+    console.print(f"[bold green]cortexia[/] v{__version__} starting on {host}:{port}")
     console.print(f"  Docs:  http://{host}:{port}/docs")
     console.print(f"  Redoc: http://{host}:{port}/redoc")
 
@@ -156,7 +151,7 @@ def recognize(image: str):
 
     result = pipeline.process_image(img)
 
-    table = Table(title=f"CORTEXIA Analysis — {result.face_count} face(s) detected")
+    table = Table(title=f"Analysis — {result.face_count} face(s) detected")
     table.add_column("#", style="dim")
     table.add_column("Identity", style="bold")
     table.add_column("Confidence", justify="right")
@@ -183,8 +178,8 @@ def recognize(image: str):
 
 @cli.command()
 def info():
-    """Show CORTEXIA system information."""
-    table = Table(title="CORTEXIA System Information")
+    """Show system info."""
+    table = Table(title="System Information")
     table.add_column("Property", style="bold")
     table.add_column("Value")
 

@@ -1,5 +1,5 @@
 """
-Unit tests for cortexia.config — settings and validation.
+Test config loading and validation.
 """
 
 import os

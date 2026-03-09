@@ -1,12 +1,7 @@
 """
-CORTEXIA — FastAPI Application Factory.
+FastAPI app factory and lifespan management.
 
-This is the main entry point for the CORTEXIA API server.
-It configures:
-  - Lifespan handler (load ML models on startup, release on shutdown)
-  - All API routes under /api/v1
-  - CORS, authentication, and request logging middleware
-  - Automatic OpenAPI documentation at /docs and /redoc
+Loads ML models on startup, registers all routes, sets up CORS/logging.
 """
 
 from __future__ import annotations
@@ -30,7 +25,7 @@ logger = structlog.get_logger(__name__)
 
 @dataclass
 class AppState:
-    """Mutable application state container."""
+    """Holds runtime state (pipeline, uptime)."""
 
     pipeline: TrustPipeline | None = None
     start_time: float = 0.0
@@ -41,11 +36,7 @@ app_state = AppState()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application lifespan handler.
-
-    On startup: initialize database, load ML models.
-    On shutdown: release resources.
-    """
+    """Startup: init DB + load models. Shutdown: cleanup."""
     settings = get_settings()
     app_state.start_time = time.time()
 
@@ -143,11 +134,8 @@ def create_app() -> FastAPI:
     is_prod = settings.app_env == "production"
 
     app = FastAPI(
-        title="CORTEXIA",
-        description=(
-            "Neural Face Intelligence Platform — "
-            "Trust Pipeline · Zero-Shot Discovery · Forensic Audit Trail"
-        ),
+        title="Cortexia",
+        description="Face recognition API with trust scoring and anti-spoofing",
         version=__version__,
         docs_url=None if is_prod else "/docs",
         redoc_url=None if is_prod else "/redoc",
@@ -155,7 +143,7 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    # ───── CORS ─────
+    # CORS
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
@@ -164,7 +152,7 @@ def create_app() -> FastAPI:
         allow_headers=["Content-Type", "X-API-Key", "Authorization"],
     )
 
-    # ───── Request Logging Middleware ─────
+    # Request logging
     @app.middleware("http")
     async def log_requests(request: Request, call_next):
         start = time.perf_counter()
@@ -181,7 +169,7 @@ def create_app() -> FastAPI:
             )
         return response
 
-    # ───── Exception Handler ─────
+    # Global error handler
     @app.exception_handler(Exception)
     async def global_exception_handler(request: Request, exc: Exception):
         logger.error("unhandled_exception", error=str(exc), path=request.url.path)
@@ -194,7 +182,7 @@ def create_app() -> FastAPI:
             },
         )
 
-    # ───── Register Routes ─────
+    # Routes
     from cortexia.api.routes import (
         analytics,
         clusters,

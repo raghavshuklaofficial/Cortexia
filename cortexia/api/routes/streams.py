@@ -1,6 +1,4 @@
-"""
-WebSocket streaming routes for real-time face analysis.
-"""
+"""WebSocket streaming for real-time face analysis."""
 
 from __future__ import annotations
 
@@ -21,7 +19,7 @@ logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="/streams", tags=["Streaming"])
 
-MAX_CONNECTIONS = 5
+MAX_CONNECTIONS = 5  # don't let too many WS clients kill the server
 
 
 class ConnectionManager:

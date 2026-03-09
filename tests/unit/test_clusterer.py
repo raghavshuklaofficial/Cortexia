@@ -1,5 +1,5 @@
 """
-Unit tests for cortexia.core.clusterer — HDBSCAN identity clustering.
+Clustering tests (HDBSCAN).
 """
 
 import numpy as np

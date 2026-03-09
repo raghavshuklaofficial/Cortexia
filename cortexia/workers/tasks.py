@@ -1,10 +1,6 @@
 """
-Celery tasks for background processing.
-
-- Batch recognition jobs
-- Periodic identity re-clustering
-- Stale data retention cleanup
-- Gallery cache warming
+Celery background tasks: batch recognition, re-clustering,
+data cleanup, gallery warming.
 """
 
 from __future__ import annotations

@@ -1,12 +1,9 @@
 """
-Face embedding extraction using ArcFace (InsightFace).
+ArcFace embedding extraction (InsightFace).
 
-Extracts 512-dimensional L2-normalized face embeddings from aligned face crops.
-These embeddings are the numerical "fingerprint" of a face — two embeddings
-of the same person will have high cosine similarity (> 0.45 typically).
-
-Replaces the old face_recognition library's 128-d HOG-based embeddings with
-state-of-the-art ArcFace embeddings (99.8% accuracy on LFW benchmark).
+512-d L2-normalized vectors. Two faces of the same person typically
+have cosine similarity > 0.45. Replaces the old 128-d face_recognition
+library approach with something that actually works well.
 """
 
 from __future__ import annotations
@@ -26,14 +23,7 @@ FACE_INPUT_SIZE = (112, 112)
 
 
 class FaceEmbedder:
-    """Extract 512-d ArcFace face embeddings using InsightFace.
-
-    This embedder:
-    - Accepts aligned 112x112 face crops from the detector
-    - Returns L2-normalized 512-d numpy arrays
-    - Supports batch inference for multiple faces
-    - Optionally quantizes embeddings to float16 for storage efficiency
-    """
+    """ArcFace embedding extraction. Returns 512-d L2-normalized vectors."""
 
     def __init__(
         self,
@@ -101,6 +91,7 @@ class FaceEmbedder:
             aligned_face = cv2.resize(aligned_face, FACE_INPUT_SIZE)
 
         # Use InsightFace's recognition model directly
+        # (this avoids running detection again on an already-cropped face)
         if self._rec_model is not None:
             embedding = self._rec_model.get_feat(aligned_face).flatten()
         else:
@@ -126,16 +117,8 @@ class FaceEmbedder:
     def extract_batch(
         self, aligned_faces: list[NDArray[np.uint8]]
     ) -> list[NDArray[np.float32]]:
-        """Extract embeddings for multiple aligned face crops.
-
-        More efficient than calling extract() in a loop when processing
-        multiple faces from a single frame.
-
-        Args:
-            aligned_faces: List of aligned BGR face crops
-
-        Returns:
-            List of L2-normalized embeddings
+        """Extract embeddings for multiple faces. Just loops for now.
+        TODO: actual batch inference would be faster
         """
         if not aligned_faces:
             return []

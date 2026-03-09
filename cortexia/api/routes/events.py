@@ -1,6 +1,4 @@
-"""
-Recognition event listing route.
-"""
+"""Recognition event listing (audit trail)."""
 
 from __future__ import annotations
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-CORTEXIA — Seed sample data for development/demo.
+Seed sample data for development/demo.
 
 Creates sample identities from any images found in a sample_faces/ directory,
 or generates synthetic placeholder data if no images are available.
@@ -26,7 +26,7 @@ async def seed():
     from cortexia.db.models import Identity, FaceEmbedding, RecognitionEvent
 
     print("=" * 60)
-    print("  CORTEXIA — Seed Data")
+    print("  Seed Data")
     print("=" * 60)
 
     settings = get_settings()

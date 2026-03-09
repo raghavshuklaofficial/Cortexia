@@ -1,6 +1,4 @@
-"""
-Forensics routes — dedicated liveness and face quality analysis.
-"""
+"""Forensics routes — liveness checks and face quality analysis."""
 
 from __future__ import annotations
 

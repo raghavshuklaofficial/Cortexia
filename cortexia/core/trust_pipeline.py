@@ -1,16 +1,11 @@
 """
-CORTEXIA Trust Pipeline — The Core Intelligence Chain.
+Trust Pipeline - the core processing chain.
 
-The Trust Pipeline is what makes CORTEXIA unique. Every face passes
-through a multi-stage verification chain:
+Every detected face goes through:
+  Detection -> Alignment -> Liveness -> Embedding -> Recognition -> Attributes
 
-    Detection → Alignment → Liveness Check → Embedding → Recognition → Attributes
-
-Each stage produces a result and feeds the next. Faces failing liveness
-check are flagged (and optionally blocked from recognition). A composite
-trust_score aggregates confidence across all stages.
-
-The pipeline is configurable — stages can be enabled/disabled independently.
+Each stage feeds the next. Spoof-flagged faces get penalized in the
+final trust score. Stages can be toggled independently via config.
 """
 
 from __future__ import annotations
@@ -85,26 +80,20 @@ class PipelineConfig:
 
 
 class TrustPipeline:
-    """The CORTEXIA Trust Pipeline.
+    """Runs faces through the full analysis chain.
 
-    Orchestrates the full face intelligence chain:
-    1. DETECT — Find faces with bounding boxes and landmarks
-    2. ALIGN — Warp faces to standard 112x112 using landmarks
-    3. VERIFY — Anti-spoofing liveness check
-    4. EMBED — Extract 512-d ArcFace embeddings
-    5. RECOGNIZE — Match against enrolled identities
-    6. ANALYZE — Predict age, gender, emotion
+    Stages:
+    1. Detect faces + landmarks
+    2. Align to 112x112
+    3. Anti-spoofing check
+    4. Extract 512-d embedding
+    5. Match against gallery
+    6. Predict age/gender/emotion
 
-    Each face receives a trust_score computed as:
-        trust = w1*detection_conf + w2*liveness_conf + w3*recognition_conf
+    Trust score = weighted sum of detection, liveness, recognition confidences.
     """
 
     def __init__(self, config: PipelineConfig | None = None) -> None:
-        """Initialize all pipeline components.
-
-        Args:
-            config: Pipeline configuration. Uses defaults if None.
-        """
         self._config = config or PipelineConfig()
         self._initialized = False
 
@@ -198,7 +187,7 @@ class TrustPipeline:
         start = time.perf_counter()
         h, w = image.shape[:2]
 
-        # ════════════ Stage 1: DETECT ════════════
+        # Stage 1: Detection (RetinaFace / MediaPipe)
         assert self._detector is not None
         detected_faces = self._detector.detect(
             image, threshold=self._config.detection_threshold
@@ -245,7 +234,7 @@ class TrustPipeline:
         analysis = FaceAnalysis(face=face)
         detection_conf = face.confidence
 
-        # ════════════ Stage 2: ALIGN (done during detection) ════════════
+        # Stage 2: Alignment (already done during detection usually)
         aligned = face.aligned_face
         if aligned is None:
             # Fallback: crop from bounding box
@@ -259,32 +248,31 @@ class TrustPipeline:
                 analysis.trust_score = 0.0
                 return analysis
 
-        # ════════════ Stage 3: LIVENESS CHECK ════════════
+        # Stage 3: Liveness / anti-spoof
         liveness_conf = 1.0
         if self._antispoof is not None and self._config.liveness_enabled:
             liveness_result = self._antispoof.detect(aligned)
             analysis.liveness = liveness_result
             liveness_conf = liveness_result.confidence
 
-        # ════════════ Stage 4: EMBED ════════════
+        # Stage 4: Embedding extraction
         assert self._embedder is not None
         embedding = self._embedder.extract(aligned)
         analysis.embedding = embedding
 
-        # ════════════ Stage 5: RECOGNIZE ════════════
+        # Stage 5: Recognition
         recognition_conf = 0.0
         assert self._recognizer is not None
         match = self._recognizer.recognize(embedding)
         analysis.recognition = match
         recognition_conf = match.confidence
 
-        # ════════════ Stage 6: ATTRIBUTES ════════════
+        # Stage 6: Attributes (age, gender, emotion)
         if self._attributes is not None and self._config.attributes_enabled:
             attrs = self._attributes.predict(aligned)
             analysis.attributes = attrs
 
-        # ════════════ COMPUTE TRUST SCORE ════════════
-        # Weighted combination of all confidence signals (from config)
+        # Compute trust score (weighted combination)
         trust = (
             self._config.trust_weight_detection * detection_conf
             + self._config.trust_weight_liveness * liveness_conf

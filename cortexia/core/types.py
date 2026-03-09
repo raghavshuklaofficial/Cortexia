@@ -1,4 +1,4 @@
-"""Data types shared across the CORTEXIA core engine."""
+"""Core data types used across the pipeline."""
 
 from __future__ import annotations
 

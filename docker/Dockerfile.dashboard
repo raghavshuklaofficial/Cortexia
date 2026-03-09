@@ -1,6 +1,4 @@
-# ─────────────────────────────────────────────────────────
-# CORTEXIA Dashboard — Build with Node, serve with nginx
-# ─────────────────────────────────────────────────────────
+# Dashboard build -- node build then serve via nginx
 
 # Stage 1: Build
 FROM node:20-alpine AS builder

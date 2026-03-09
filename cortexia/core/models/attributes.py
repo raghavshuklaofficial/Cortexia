@@ -1,8 +1,9 @@
 """
-Face attribute prediction: age, gender, and emotion.
+Face attributes: age, gender, emotion.
 
-Uses InsightFace's attribute models for age and gender, and a
-lightweight image-based emotion classifier for facial expressions.
+Age + gender come from InsightFace's genderage module.
+Emotion is a lightweight heuristic based on facial region features
+(could be replaced with a proper CNN later, but works okay for now).
 """
 
 from __future__ import annotations
@@ -32,11 +33,10 @@ EMOTION_LABELS = [
 
 
 class FaceAttributePredictor:
-    """Predict age, gender, and emotion from face crops.
+    """Predicts age, gender, emotion from face crops.
 
-    Uses InsightFace's built-in attribute models for age and gender,
-    and a custom emotion analysis pipeline based on facial geometry
-    and texture features.
+    Age/gender: InsightFace genderage module
+    Emotion: heuristic feature analysis (not great but works for demos)
     """
 
     def __init__(

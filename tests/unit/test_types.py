@@ -1,5 +1,5 @@
 """
-Unit tests for cortexia.core.types — data structures and geometry.
+Tests for core data types and geometry helpers.
 """
 
 import numpy as np

@@ -1,13 +1,9 @@
 """
-Multi-face tracker for video streams.
+Multi-face tracker for video streams (SORT-inspired).
 
-Uses a combination of IoU (Intersection over Union) and embedding
-similarity to maintain consistent track IDs across frames. This
-avoids re-running the full recognition pipeline every frame —
-only new tracks or periodically refreshed tracks get full analysis.
-
-Based on a simplified SORT (Simple Online and Realtime Tracking)
-algorithm adapted for face tracking.
+Uses IoU + embedding similarity to keep consistent track IDs across
+frames. Avoids re-running full recognition every single frame -- only
+new faces or periodically refreshed tracks get the full pipeline.
 """
 
 from __future__ import annotations
@@ -38,20 +34,17 @@ class Track:
     frames_since_recognition: int = 0  # For periodic re-recognition
 
     def predict_next_bbox(self) -> BoundingBox:
-        """Simple prediction: assume face stays in same position."""
+        """Simple prediction: assume face stays in same position.
+        TODO: add a Kalman filter here for smoother tracking
+        """
         return self.bbox
 
 
 class FaceTracker:
-    """Multi-face tracker for video streams.
+    """Keeps track IDs consistent across video frames.
 
-    Maintains persistent track IDs across frames to:
-    1. Avoid redundant recognition on every frame
-    2. Provide smooth bounding box tracking
-    3. Aggregate recognition results over time per track
-
-    A track is created when a new face appears and destroyed
-    when it hasn't been detected for max_age frames.
+    Creates new tracks when faces appear, destroys them after max_age frames
+    without detection. Only new/refreshed tracks get full recognition.
     """
 
     def __init__(
